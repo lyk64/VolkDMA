@@ -1,45 +1,47 @@
 #include "include/VolkDMA/inputstate.hh"
 
-#include <iostream>
+#include <VolkLog/log.hh>
 
 #include "external/vmm/vmmdll.h"
 
 #include "include/VolkDMA/dma.hh"
 #include "include/VolkDMA/internal/volkresource.hh"
 
+static constexpr Volk::Log::Logger logger{ "INPUTSTATE" };
+
 InputState::InputState(const DMA& dma) : dma(dma) {
     const std::vector<DWORD> csrss_process_ids = dma.get_process_id_list("csrss.exe");
 
     if (retrieve_gptCursorAsync(csrss_process_ids)) {
-        std::cout << "[INPUTSTATE] Successfully retrieved gptCursorAsync!\n";
+        logger.info("Successfully retrieved gptCursorAsync.");
     }
     else {
-        std::cerr << "[INPUTSTATE] Failed to retrieve gptCursorAsync!\n";
+        logger.error("Failed to retrieve gptCursorAsync.");
     }
 
     if (!VMMDLL_ConfigGet(dma.handle.get(), VMMDLL_OPT_WIN_VERSION_BUILD, &windows_version_build)) {
-        std::cerr << "[INPUTSTATE] Failed to retrieve Windows build!\n";
+        logger.error("Failed to retrieve Windows build.");
         return;
     }
 
     if (retrieve_gafAsyncKeyState(csrss_process_ids)) {
-        std::cout << "[INPUTSTATE] Successfully retrieved gafAsyncKeyState!\n";
+        logger.info("Successfully retrieved gafAsyncKeyState.");
     }
     else {
-        std::cerr << "[INPUTSTATE] Failed to retrieve gafAsyncKeyState!\n";
+        logger.error("Failed to retrieve gafAsyncKeyState.");
     }
 }
 
 bool InputState::retrieve_gafAsyncKeyState(const std::vector<DWORD>& csrss_process_ids) {
     winlogon_process_id = dma.get_process_id("winlogon.exe");
     if (!winlogon_process_id) {
-        std::cerr << "[INPUTSTATE] Failed to get process ID for winlogon.exe.\n";
+        logger.error("Failed to get process ID for winlogon.exe.");
         return false;
     }
 
     if (windows_version_build > 22000) {
         if (csrss_process_ids.empty()) {
-            std::cerr << "[INPUTSTATE] No csrss.exe processes found.\n";
+            logger.error("No csrss.exe processes found.");
             return false;
         }
 
@@ -53,7 +55,7 @@ bool InputState::retrieve_gafAsyncKeyState(const std::vector<DWORD>& csrss_proce
                 win32k_module_name = "win32k.sys";
             }
             else {
-                std::cerr << "[INPUTSTATE] Failed to find win32ksgd.sys or win32k.sys for csrss.exe with process ID: " << process_id << "\n";
+                logger.error("Failed to find win32ksgd.sys or win32k.sys for csrss.exe (PID: {}).", process_id);
                 continue;
             }
 
@@ -62,7 +64,7 @@ bool InputState::retrieve_gafAsyncKeyState(const std::vector<DWORD>& csrss_proce
                 g_session_address = dma.find_signature("48 8B 05 ? ? ? ? FF C9", win32k_module_info->vaBase, win32k_module_info->vaBase + win32k_module_info->cbImageSize, process_id);
 
             if (!g_session_address) {
-                std::cerr << "[INPUTSTATE] Failed to find signature in " << win32k_module_name << " for csrss.exe with process ID: " << process_id << "\n";
+                logger.error("Failed to find signature in {} for csrss.exe (PID: {}).", win32k_module_name, process_id);
                 continue;
             }
 
@@ -75,13 +77,13 @@ bool InputState::retrieve_gafAsyncKeyState(const std::vector<DWORD>& csrss_proce
 
             VolkResource<VMMDLL_MAP_MODULEENTRY> win32kbase_info{};
             if (!VMMDLL_Map_GetModuleFromNameW(dma.handle.get(), process_id, const_cast<LPWSTR>(L"win32kbase.sys"), win32kbase_info.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
-                std::cerr << "[INPUTSTATE] Failed to find win32kbase.sys for csrss.exe with process ID: " << process_id << "\n";
+                logger.error("Failed to find win32kbase.sys for csrss.exe (PID: {}).", process_id);
                 continue;
             }
 
             uint64_t sig_ptr = dma.find_signature("48 8D 90 ? ? ? ? E8 ? ? ? ? 0F 57 C0", win32kbase_info->vaBase, win32kbase_info->vaBase + win32kbase_info->cbImageSize, process_id);
             if (!sig_ptr) {
-                std::cerr << "[INPUTSTATE] Failed to find signature in win32kbase.sys for csrss.exe with process ID: " << process_id << "\n";
+                logger.error("Failed to find signature in win32kbase.sys for csrss.exe (PID: {}).", process_id);
                 continue;
             }
 
@@ -98,7 +100,7 @@ bool InputState::retrieve_gafAsyncKeyState(const std::vector<DWORD>& csrss_proce
     // windows_version_build <= 22000
     VolkResource<VMMDLL_MAP_EAT> eat_map{};
     if (!VMMDLL_Map_GetEATU(dma.handle.get(), winlogon_process_id | VMMDLL_PID_PROCESS_WITH_KERNELMEMORY, const_cast<LPSTR>("win32kbase.sys"), eat_map.out()) || eat_map->dwVersion != VMMDLL_MAP_EAT_VERSION) {
-        std::cerr << "[INPUTSTATE] Failed to retrieve EAT map in win32kbase.sys for winlogon.exe with process ID: " << winlogon_process_id << "\n";
+        logger.error("Failed to retrieve EAT map in win32kbase.sys for winlogon.exe (PID: {}).", winlogon_process_id);
         return false;
     }
 
@@ -115,19 +117,19 @@ bool InputState::retrieve_gafAsyncKeyState(const std::vector<DWORD>& csrss_proce
 
 bool InputState::retrieve_gptCursorAsync(const std::vector<DWORD>& csrss_process_ids) {
     if (csrss_process_ids.empty()) {
-        std::cerr << "[INPUTSTATE] No csrss.exe processes found.\n";
+        logger.error("No csrss.exe processes found.");
         return false;
     }
 
     for (const DWORD& process_id : csrss_process_ids) {
         VolkResource<VMMDLL_MAP_EAT> eat_map;
         if (!VMMDLL_Map_GetEATU(dma.handle.get(), process_id | VMMDLL_PID_PROCESS_WITH_KERNELMEMORY, const_cast<LPSTR>("win32kbase.sys"), eat_map.out())) {
-            std::cerr << "[INPUTSTATE] Failed to retrieve EAT map in win32kbase.sys for csrss.exe with process ID: " << process_id << "\n";
+            logger.error("Failed to retrieve EAT map in win32kbase.sys for csrss.exe (PID: {}).", process_id);
             continue;
         }
 
         if (eat_map->dwVersion != VMMDLL_MAP_EAT_VERSION) {
-            std::cerr << "[INPUTSTATE] EAT version mismatch for process ID " << process_id << ": got " << eat_map->dwVersion << "\n";
+            logger.error("EAT version mismatch for csrss.exe (PID: {}): got {}.", process_id, eat_map->dwVersion);
             continue;
         }
 
@@ -174,7 +176,7 @@ bool InputState::is_key_down(uint8_t virtual_key_code) const {
 void InputState::print_down_keys() const {
     for (const auto& [code, name] : virtual_keys) {
         if (is_key_down(code)) {
-            std::cout << "Key: " << name << " is down\n";
+            logger.debug("Key down: {}.", name);
         }
     }
 }

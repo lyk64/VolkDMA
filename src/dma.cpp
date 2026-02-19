@@ -1,15 +1,18 @@
 #include "include/VolkDMA/dma.hh"
 
+#include <VolkLog/log.hh>
+
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-#include <iostream>
 #include <sstream>
 
 #include "external/vmm/vmmdll.h"
 
 #include "include/VolkDMA/inputstate.hh"
 #include "include/VolkDMA/internal/volkresource.hh"
+
+static constexpr Volk::Log::Logger logger{ "DMA" };
 
 template<typename T>
 T DMA::read(uint64_t address, DWORD process_id) const {
@@ -29,13 +32,13 @@ template InputState::Point DMA::read<InputState::Point>(uint64_t, DWORD) const;
 DMA::DMA(bool use_memory_map) {
     LPCSTR argv[8] = {"", "-device", "fpga://algo=0", "", "", "", "", ""};
     DWORD argc = 3;
-    
+
     std::string path;
     if (use_memory_map) {
         path = (std::filesystem::current_path() / "memory_map.txt").string();
 
         if (!std::filesystem::exists(path) && !dump_memory_map()) {
-            std::cerr << "[DMA] Could not dump memory map.\n";
+            logger.warn("Could not dump memory map.");
         }
         else {
             argv[argc++] = "-memmap";
@@ -45,7 +48,7 @@ DMA::DMA(bool use_memory_map) {
 
     handle.reset(VMMDLL_Initialize(argc, argv));
     if (!handle) {
-        std::cerr << "[DMA] Failed to initialize.\n";
+        logger.error("Failed to initialize.");
         return;
     }
 
@@ -56,7 +59,7 @@ DWORD DMA::get_process_id(const std::string& process_name) const {
     DWORD process_id = 0;
 
     if (!VMMDLL_PidGetFromName(this->handle.get(), process_name.c_str(), &process_id) || process_id == 0) {
-        std::cerr << "[PROCESS] Failed to get ID for process: " << process_name << ".\n";
+        logger.error("Failed to get ID for process: {}.", process_name);
     }
 
     return process_id;
@@ -69,7 +72,7 @@ std::vector<DWORD> DMA::get_process_id_list(const std::string& process_name) con
     DWORD total_processes = 0;
 
     if (!VMMDLL_ProcessGetInformationAll(this->handle.get(), process_info.out(), &total_processes) || total_processes == 0) {
-        std::cerr << "[PROCESS] Failed to retrieve process process list.\n";
+        logger.error("Failed to retrieve process list.");
         return list;
     }
 
@@ -79,7 +82,7 @@ std::vector<DWORD> DMA::get_process_id_list(const std::string& process_name) con
             list.push_back(process.dwPID);
         }
     }
-    
+
     return list;
 }
 
@@ -134,20 +137,20 @@ bool DMA::dump_memory_map() {
 
     VolkHandle temp_handle(VMMDLL_Initialize(argc, argv), vmm_close);
     if (!temp_handle) {
-        std::cerr << "[DMA] Failed to open handle.\n";
+        logger.error("Failed to open handle.");
         return false;
     }
 
     VolkResource<VMMDLL_MAP_PHYSMEM> p_phys_mem_map{};
     if (!VMMDLL_Map_GetPhysMem(temp_handle.get(), p_phys_mem_map.out())) {
-        std::cerr << "[DMA] Failed to get physical memory map.\n";
+        logger.error("Failed to get physical memory map.");
         return false;
     }
 
     if (!p_phys_mem_map ||
         p_phys_mem_map->dwVersion != VMMDLL_MAP_PHYSMEM_VERSION ||
         p_phys_mem_map->cMap == 0) {
-        std::cerr << "[DMA] Invalid memory map.\n";
+        logger.error("Invalid memory map.");
         return false;
     }
 
@@ -172,7 +175,7 @@ bool DMA::clean_fpga() {
     ULONG64 fpga_id = 0, version_major = 0, version_minor = 0;
 
     if (!(VMMDLL_ConfigGet(this->handle.get(), LC_OPT_FPGA_FPGA_ID, &fpga_id) && VMMDLL_ConfigGet(this->handle.get(), LC_OPT_FPGA_VERSION_MAJOR, &version_major) && VMMDLL_ConfigGet(this->handle.get(), LC_OPT_FPGA_VERSION_MINOR, &version_minor))) {
-        std::cerr << "[DMA] Failed to lookup FPGA device. Attempting to continue initializing.\n";
+        logger.warn("Failed to lookup FPGA device, attempting to continue initializing.");
         return false;
     }
 
@@ -181,7 +184,7 @@ bool DMA::clean_fpga() {
         HANDLE lc_handle = LcCreate(&config);
 
         if (!lc_handle) {
-            std::cerr << "[DMA] Failed to create FPGA device handle. Attempting to continue initializing.\n";
+            logger.warn("Failed to create FPGA device handle, attempting to continue initializing.");
             return false;
         }
 

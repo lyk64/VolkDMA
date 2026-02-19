@@ -1,8 +1,9 @@
 #include "include/VolkDMA/process.hh"
 
+#include <VolkLog/log.hh>
+
 #include <cstring>
 #include <filesystem>
-#include <iostream>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -13,6 +14,8 @@
 
 #include "include/VolkDMA/dma.hh"
 #include "include/VolkDMA/internal/volkresource.hh"
+
+static constexpr Volk::Log::Logger logger{ "PROCESS" };
 
 static constexpr DWORD scatter_flags = VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_ZEROPAD_ON_FAIL | VMMDLL_FLAG_SCATTER_PREPAREEX_NOMEMZERO;
 
@@ -28,7 +31,7 @@ uint64_t Process::get_base_address(const std::string& module_name) const {
     VolkResource<VMMDLL_MAP_MODULEENTRY> module_entry{};
 
     if (!VMMDLL_Map_GetModuleFromNameU(this->dma.handle.get(), this->process_id, module_name.c_str(), module_entry.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
-        std::cerr << "[PROCESS] Failed to find base address of module: " << module_name << ".\n";
+        logger.error("Failed to find base address of module: {}.", module_name);
         return 0;
     }
 
@@ -39,7 +42,7 @@ size_t Process::get_size(const std::string& module_name) const {
     VolkResource<VMMDLL_MAP_MODULEENTRY> module_entry{};
 
     if (!VMMDLL_Map_GetModuleFromNameU(this->dma.handle.get(), this->process_id, module_name.c_str(), module_entry.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
-        std::cerr << "[PROCESS] Failed to find size of module: " << module_name << ".\n";
+        logger.error("Failed to find size of module: {}.", module_name);
         return 0;
     }
 
@@ -49,29 +52,29 @@ size_t Process::get_size(const std::string& module_name) const {
 bool Process::dump_module(const std::string& module_name, const std::string& path) const {
     const uint64_t base_address = this->get_base_address(module_name);
     if (!base_address) {
-        std::cerr << "[PROCESS] Failed to get base address for module: " << module_name << ".\n";
+        logger.error("Failed to get base address for module: {}.", module_name);
         return false;
     }
 
     IMAGE_DOS_HEADER dos{};
     if (!read(base_address, &dos, sizeof(IMAGE_DOS_HEADER))) {
-        std::cerr << "[PROCESS] Failed to read IMAGE_DOS_HEADER for module: " << module_name << ".\n";
+        logger.error("Failed to read IMAGE_DOS_HEADER for module: {}.", module_name);
         return false;
     }
 
     if (dos.e_magic != IMAGE_DOS_SIGNATURE) {
-        std::cerr << "[PROCESS] Invalid DOS signature for module: " << module_name << ".\n";
+        logger.error("Invalid DOS signature for module: {}.", module_name);
         return false;
     }
 
     IMAGE_NT_HEADERS64 nt{};
     if (!this->read(base_address + dos.e_lfanew, &nt, sizeof(nt))) {
-        std::cerr << "[PROCESS] Failed to read IMAGE_NT_HEADERS64 for module: " << module_name << ".\n";
+        logger.error("Failed to read IMAGE_NT_HEADERS64 for module: {}.", module_name);
         return false;
     }
 
     if (nt.Signature != IMAGE_NT_SIGNATURE || nt.OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR64_MAGIC) {
-        std::cerr << "[PROCESS] Invalid NT headers for module: " << module_name << ".\n";
+        logger.error("Invalid NT headers for module: {}.", module_name);
         return false;
     }
 
@@ -96,7 +99,7 @@ bool Process::dump_module(const std::string& module_name, const std::string& pat
     CloseHandle(file_handle);
 
     if (!success || written != image_size) {
-        std::cerr << "[PROCESS] Failed to write dump for module: " << module_name << ".\n";
+        logger.error("Failed to write dump for module: {}.", module_name);
         return false;
     }
 
@@ -107,7 +110,7 @@ std::string Process::get_path(const std::string& module_name) const {
     VolkResource<VMMDLL_MAP_MODULEENTRY> mod;
 
     if (!VMMDLL_Map_GetModuleFromNameU(this->dma.handle.get(), this->process_id, module_name.c_str(), mod.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
-        std::cerr << "[PROCESS] Failed to find path for module: " << module_name << ".\n";
+        logger.error("Failed to find path for module: {}.", module_name);
         return {};
     }
 
@@ -121,7 +124,7 @@ std::vector<std::string> Process::get_modules(DWORD process_id) const {
     VolkResource<VMMDLL_MAP_MODULE> module_map;
 
     if (!VMMDLL_Map_GetModuleU(this->dma.handle.get(), target_process_id, module_map.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
-        std::cerr << "[PROCESS] Failed to get module list.\n";
+        logger.error("Failed to get module list.");
         return modules;
     }
 
@@ -138,14 +141,14 @@ std::vector<std::string> Process::get_modules(DWORD process_id) const {
 
 bool Process::fix_cr3(const std::string& process_name) {
     VolkResource<VMMDLL_MAP_MODULEENTRY> module_entry;
-    
+
     if (VMMDLL_Map_GetModuleFromNameU(this->dma.handle.get(), this->process_id, process_name.c_str(), module_entry.out(), NULL)) {
-        std::cerr << "[PROCESS] CR3 fix not needed.\n";
+        logger.debug("CR3 fix not needed.");
         return true;
     }
 
     if (!VMMDLL_InitializePlugins(this->dma.handle.get())) {
-        std::cerr << "[PROCESS] Failed to initialize plugins.\n";
+        logger.error("Failed to initialize plugins.");
         return false;
     }
 
@@ -205,18 +208,18 @@ bool Process::fix_cr3(const std::string& process_name) {
 
             if (!VMMDLL_MemReadEx(this->dma.handle.get(), -1, dtb, reinterpret_cast<PBYTE>(pml4_first), sizeof(pml4_first), &read_size,
                 VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_NOPAGING | VMMDLL_FLAG_ZEROPAD_ON_FAIL | VMMDLL_FLAG_NOPAGING_IO)) {
-                std::cerr << "[PROCESS] Failed to read PML4 the first time.\n";
+                logger.error("Failed to read PML4 the first time.");
                 return false;
             }
 
             if (!VMMDLL_MemReadEx(this->dma.handle.get(), -1, dtb, reinterpret_cast<PBYTE>(pml4_second), sizeof(pml4_second), &read_size,
                 VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_NOPAGING | VMMDLL_FLAG_ZEROPAD_ON_FAIL | VMMDLL_FLAG_NOPAGING_IO)) {
-                std::cerr << "[PROCESS] Failed to read PML4 the second time.\n";
+                logger.error("Failed to read PML4 the second time.");
                 return false;
             }
 
             if (memcmp(pml4_first, pml4_second, sizeof(pml4_first)) != 0) {
-                std::cerr << "[PROCESS] PML4 mismatch between reads.\n";
+                logger.error("PML4 mismatch between reads.");
                 return false;
             }
 
@@ -227,7 +230,7 @@ bool Process::fix_cr3(const std::string& process_name) {
         }
     }
 
-    std::cerr << "[PROCESS] Failed to patch process: " << process_name << ".\n";
+    logger.error("Failed to patch process: {}.", process_name);
     return false;
 }
 
@@ -246,7 +249,7 @@ bool Process::read(uint64_t address, void* buffer, size_t size) const {
 
     DWORD read_size = 0;
     if (!VMMDLL_MemReadEx(this->dma.handle.get(), this->process_id, address, static_cast<PBYTE>(buffer), size, &read_size, VMMDLL_FLAG_NOCACHE)) {
-        std::cerr << "[PROCESS] Failed to read memory at 0x" << std::hex << address << " (Process ID: " << std::dec << this->process_id << ").\n";
+        logger.error("Failed to read memory at 0x{:x} (PID: {}).", address, this->process_id);
         return false;
     }
 
@@ -269,8 +272,7 @@ bool Process::write(uint64_t address, void* buffer, size_t size, DWORD process_i
     DWORD target_process_id = (process_id == 0) ? this->process_id : process_id;
 
     if (!VMMDLL_MemWrite(this->dma.handle.get(), target_process_id, address, static_cast<PBYTE>(buffer), size)) {
-        std::cerr << "[PROCESS] Failed to write memory at 0x" << std::hex << address
-            << " (Process ID: " << std::dec << target_process_id << ").\n";
+        logger.error("Failed to write memory at 0x{:x} (PID: {}).", address, target_process_id);
         return false;
     }
 
@@ -281,7 +283,7 @@ VMMDLL_SCATTER_HANDLE Process::create_scatter(DWORD process_id) const {
     DWORD target_process_id = (process_id != 0) ? process_id : this->process_id;
     VMMDLL_SCATTER_HANDLE scatter_handle = VMMDLL_Scatter_Initialize(this->dma.handle.get(), target_process_id, scatter_flags);
     if (!scatter_handle) {
-        std::cerr << "[PROCESS] Failed to create scatter handle.\n";
+        logger.error("Failed to create scatter handle.");
     }
     return scatter_handle;
 }
@@ -299,7 +301,7 @@ bool Process::add_read_scatter(VMMDLL_SCATTER_HANDLE scatter_handle, uint64_t ad
     }
 
     if (!VMMDLL_Scatter_PrepareEx(scatter_handle, address, size, static_cast<PBYTE>(buffer), NULL)) {
-        std::cerr << "[PROCESS] Failed to prepare scatter read at 0x" << std::hex << address << std::dec << ".\n";
+        logger.error("Failed to prepare scatter read at 0x{:x}.", address);
         return false;
     }
     ++this->scatter_counts[scatter_handle];
@@ -313,7 +315,7 @@ bool Process::add_write_scatter(VMMDLL_SCATTER_HANDLE scatter_handle, uint64_t a
     }
 
     if (!VMMDLL_Scatter_PrepareWrite(scatter_handle, address, static_cast<PBYTE>(buffer), size)) {
-        std::cerr << "[PROCESS] Failed to prepare scatter write at 0x" << std::hex << address << std::dec << ".\n";
+        logger.error("Failed to prepare scatter write at 0x{:x}.", address);
         return false;
     }
     ++this->scatter_counts[scatter_handle];
@@ -331,12 +333,12 @@ bool Process::execute_scatter(VMMDLL_SCATTER_HANDLE scatter_handle, DWORD proces
     bool success = true;
 
     if (!VMMDLL_Scatter_Execute(scatter_handle)) {
-        std::cerr << "[PROCESS] Failed to execute scatter.\n";
+        logger.error("Failed to execute scatter.");
         success = false;
     }
 
     if (!VMMDLL_Scatter_Clear(scatter_handle, target_process_id, scatter_flags)) {
-        std::cerr << "[PROCESS] Failed to clear scatter.\n";
+        logger.error("Failed to clear scatter.");
         success = false;
     }
 
