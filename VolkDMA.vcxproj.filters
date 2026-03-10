@@ -10,6 +10,9 @@
     <Filter Include="external\vmm">
       <UniqueIdentifier>{6203e5d7-a367-4e25-ab44-e4f2e75075c4}</UniqueIdentifier>
     </Filter>
+    <Filter Include="external\VolkLog">
+      <UniqueIdentifier>{a1b2c3d4-e5f6-7890-abcd-ef1234567890}</UniqueIdentifier>
+    </Filter>
     <Filter Include="src">
       <UniqueIdentifier>{72b5aeb7-9ef2-4597-9394-e1042c19e6b3}</UniqueIdentifier>
     </Filter>
@@ -24,6 +27,9 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="external\VolkLog\include\VolkLog\log.hh">
+      <Filter>external\VolkLog</Filter>
+    </ClInclude>
     <ClInclude Include="external\leechcore\leechcore.h">
       <Filter>external\leechcore</Filter>
     </ClInclude>
