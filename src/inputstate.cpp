@@ -159,23 +159,26 @@ InputState::Point InputState::get_cursor_position() const {
 }
 
 bool InputState::read_bitmap() {
+    prev_bitmap = state_bitmap;
     return VMMDLL_MemReadEx(dma.handle.get(), winlogon_process_id | VMMDLL_PID_PROCESS_WITH_KERNELMEMORY, gafAsyncKeyState_address, reinterpret_cast<PBYTE>(&state_bitmap), sizeof(state_bitmap), nullptr, VMMDLL_FLAG_NOCACHE);
 }
 
-bool InputState::is_key_down(uint8_t virtual_key_code) const {
-    constexpr int bits_per_key = 2;
-    constexpr int bits_per_byte = 8;
+bool InputState::get_bit(const std::array<uint8_t, 64>& bitmap, uint8_t virtual_key_code) const {
+    const int bit_index = virtual_key_code * 2;
+    return (bitmap[bit_index / 8] & (1 << (bit_index % 8))) != 0;
+}
 
-    const int bit_index = virtual_key_code * bits_per_key;
-    const int byte_index = bit_index / bits_per_byte;
-    const int bit_offset = bit_index % bits_per_byte;
+bool InputState::is_key_held(uint8_t virtual_key_code) const {
+    return get_bit(state_bitmap, virtual_key_code);
+}
 
-    return (state_bitmap[byte_index] & (1 << bit_offset)) != 0;
+bool InputState::is_key_pressed(uint8_t virtual_key_code) const {
+    return get_bit(state_bitmap, virtual_key_code) && !get_bit(prev_bitmap, virtual_key_code);
 }
 
 void InputState::print_down_keys() const {
     for (const auto& [code, name] : virtual_keys) {
-        if (is_key_down(code)) {
+        if (is_key_held(code)) {
             logger.debug("Key down: {}.", name);
         }
     }

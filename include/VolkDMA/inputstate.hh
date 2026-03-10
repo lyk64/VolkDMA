@@ -21,7 +21,8 @@ public:
     [[nodiscard]] Point get_cursor_position() const;
 
     bool read_bitmap();
-    [[nodiscard]] bool is_key_down(uint8_t virtual_key_code) const;
+    [[nodiscard]] bool is_key_held(uint8_t virtual_key_code) const;
+    [[nodiscard]] bool is_key_pressed(uint8_t virtual_key_code) const;
     void print_down_keys() const;
 
     struct VirtualKey {
@@ -199,7 +200,9 @@ private:
     DWORD winlogon_process_id{};
     uint64_t gafAsyncKeyState_address{};
     std::array<uint8_t, 64> state_bitmap{};
+    std::array<uint8_t, 64> prev_bitmap{};
 
+    [[nodiscard]] bool get_bit(const std::array<uint8_t, 64>& bitmap, uint8_t virtual_key_code) const;
     [[nodiscard]] bool retrieve_gafAsyncKeyState(const std::vector<DWORD>& csrss_process_ids);
     [[nodiscard]] bool retrieve_gptCursorAsync(const std::vector<DWORD>& csrss_process_ids);
 };
