@@ -30,7 +30,7 @@ Process::Process(DMA& dma, const std::string& process_name) : dma(dma), process_
 uint64_t Process::get_base_address(const std::string& module_name) const {
     VolkResource<VMMDLL_MAP_MODULEENTRY> module_entry{};
 
-    if (!VMMDLL_Map_GetModuleFromNameU(this->dma.handle.get(), this->process_id, module_name.c_str(), module_entry.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
+    if (!VMMDLL_Map_GetModuleFromNameU(this->dma.get_handle(), this->process_id, module_name.c_str(), module_entry.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
         logger.error("Failed to find base address of module: {}.", module_name);
         return 0;
     }
@@ -41,7 +41,7 @@ uint64_t Process::get_base_address(const std::string& module_name) const {
 size_t Process::get_size(const std::string& module_name) const {
     VolkResource<VMMDLL_MAP_MODULEENTRY> module_entry{};
 
-    if (!VMMDLL_Map_GetModuleFromNameU(this->dma.handle.get(), this->process_id, module_name.c_str(), module_entry.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
+    if (!VMMDLL_Map_GetModuleFromNameU(this->dma.get_handle(), this->process_id, module_name.c_str(), module_entry.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
         logger.error("Failed to find size of module: {}.", module_name);
         return 0;
     }
@@ -81,7 +81,9 @@ bool Process::dump_module(const std::string& module_name, const std::string& pat
     const size_t image_size = nt.OptionalHeader.SizeOfImage;
     auto image_buffer = std::make_unique<uint8_t[]>(image_size);
 
-    this->read(base_address, image_buffer.get(), image_size);
+    if (!this->read(base_address, image_buffer.get(), image_size)) {
+        logger.warn("Partial read for module dump: {}.", module_name);
+    }
     auto section_header = reinterpret_cast<PIMAGE_SECTION_HEADER>(image_buffer.get() + dos.e_lfanew + FIELD_OFFSET(IMAGE_NT_HEADERS64, OptionalHeader) + nt.FileHeader.SizeOfOptionalHeader);
 
     for (size_t i = 0; i < nt.FileHeader.NumberOfSections; i++, section_header++) {
@@ -89,7 +91,7 @@ bool Process::dump_module(const std::string& module_name, const std::string& pat
         section_header->SizeOfRawData = section_header->Misc.VirtualSize;
     }
 
-    HANDLE file_handle = CreateFileW(std::wstring(path.begin(), path.end()).c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_COMPRESSED, NULL);
+    HANDLE file_handle = CreateFileW(std::filesystem::path(path).wstring().c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_COMPRESSED, NULL);
     if (file_handle == INVALID_HANDLE_VALUE) {
         return false;
     }
@@ -109,7 +111,7 @@ bool Process::dump_module(const std::string& module_name, const std::string& pat
 std::string Process::get_path(const std::string& module_name) const {
     VolkResource<VMMDLL_MAP_MODULEENTRY> mod;
 
-    if (!VMMDLL_Map_GetModuleFromNameU(this->dma.handle.get(), this->process_id, module_name.c_str(), mod.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
+    if (!VMMDLL_Map_GetModuleFromNameU(this->dma.get_handle(), this->process_id, module_name.c_str(), mod.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
         logger.error("Failed to find path for module: {}.", module_name);
         return {};
     }
@@ -117,13 +119,13 @@ std::string Process::get_path(const std::string& module_name) const {
     return mod->uszFullName ? std::string(mod->uszFullName) : std::string{};
 }
 
-std::vector<std::string> Process::get_modules(DWORD process_id) const {
+std::vector<std::string> Process::get_modules(uint32_t process_id) const {
     DWORD target_process_id = (process_id != 0) ? process_id : this->process_id;
 
     std::vector<std::string> modules;
     VolkResource<VMMDLL_MAP_MODULE> module_map;
 
-    if (!VMMDLL_Map_GetModuleU(this->dma.handle.get(), target_process_id, module_map.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
+    if (!VMMDLL_Map_GetModuleU(this->dma.get_handle(), target_process_id, module_map.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
         logger.error("Failed to get module list.");
         return modules;
     }
@@ -142,12 +144,12 @@ std::vector<std::string> Process::get_modules(DWORD process_id) const {
 bool Process::fix_cr3(const std::string& process_name) {
     VolkResource<VMMDLL_MAP_MODULEENTRY> module_entry;
 
-    if (VMMDLL_Map_GetModuleFromNameU(this->dma.handle.get(), this->process_id, process_name.c_str(), module_entry.out(), NULL)) {
+    if (VMMDLL_Map_GetModuleFromNameU(this->dma.get_handle(), this->process_id, process_name.c_str(), module_entry.out(), NULL)) {
         logger.debug("CR3 fix not needed.");
         return true;
     }
 
-    if (!VMMDLL_InitializePlugins(this->dma.handle.get())) {
+    if (!VMMDLL_InitializePlugins(this->dma.get_handle())) {
         logger.error("Failed to initialize plugins.");
         return false;
     }
@@ -157,8 +159,8 @@ bool Process::fix_cr3(const std::string& process_name) {
     while (true) {
         BYTE bytes[4] = { 0 };
         DWORD i = 0;
-        auto nt = VMMDLL_VfsReadW(this->dma.handle.get(), (LPWSTR)L"\\misc\\procinfo\\progress_percent.txt", bytes, 3, &i, 0);
-        if (nt == VMMDLL_STATUS_SUCCESS && atoi((LPSTR)bytes) == 100)
+        auto nt = VMMDLL_VfsReadW(this->dma.get_handle(), const_cast<LPWSTR>(L"\\misc\\procinfo\\progress_percent.txt"), bytes, 3, &i, 0);
+        if (nt == VMMDLL_STATUS_SUCCESS && atoi(reinterpret_cast<LPSTR>(bytes)) == 100)
             break;
         Sleep(100);
     }
@@ -169,13 +171,13 @@ bool Process::fix_cr3(const std::string& process_name) {
     VfsFileList.pfnAddDirectory = nullptr;
     VfsFileList.pfnAddFile = cb_add_file;
 
-    if (!VMMDLL_VfsListU(this->dma.handle.get(), (LPSTR)"\\misc\\procinfo\\", &VfsFileList))
+    if (!VMMDLL_VfsListU(this->dma.get_handle(), const_cast<LPSTR>("\\misc\\procinfo\\"), &VfsFileList))
         return false;
 
     const size_t buffer_size = cb_size;
     std::unique_ptr<BYTE[]> bytes(new BYTE[buffer_size]);
     DWORD j = 0;
-    auto nt = VMMDLL_VfsReadW(this->dma.handle.get(), (LPWSTR)L"\\misc\\procinfo\\dtb.txt", bytes.get(), buffer_size - 1, &j, 0);
+    auto nt = VMMDLL_VfsReadW(this->dma.get_handle(), const_cast<LPWSTR>(L"\\misc\\procinfo\\dtb.txt"), bytes.get(), static_cast<DWORD>(buffer_size - 1), &j, 0);
     if (nt != VMMDLL_STATUS_SUCCESS)
         return false;
 
@@ -200,19 +202,19 @@ bool Process::fix_cr3(const std::string& process_name) {
     }
 
     for (const auto& dtb : possible_dtbs) {
-        VMMDLL_ConfigSet(this->dma.handle.get(), VMMDLL_OPT_PROCESS_DTB | this->process_id, dtb);
-        if (VMMDLL_Map_GetModuleFromNameU(this->dma.handle.get(), this->process_id, process_name.c_str(), module_entry.out(), NULL)) {
+        VMMDLL_ConfigSet(this->dma.get_handle(), VMMDLL_OPT_PROCESS_DTB | this->process_id, dtb);
+        if (VMMDLL_Map_GetModuleFromNameU(this->dma.get_handle(), this->process_id, process_name.c_str(), module_entry.out(), NULL)) {
             static ULONG64 pml4_first[512];
             static ULONG64 pml4_second[512];
             DWORD read_size;
 
-            if (!VMMDLL_MemReadEx(this->dma.handle.get(), -1, dtb, reinterpret_cast<PBYTE>(pml4_first), sizeof(pml4_first), &read_size,
+            if (!VMMDLL_MemReadEx(this->dma.get_handle(), -1, dtb, reinterpret_cast<PBYTE>(pml4_first), sizeof(pml4_first), &read_size,
                 VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_NOPAGING | VMMDLL_FLAG_ZEROPAD_ON_FAIL | VMMDLL_FLAG_NOPAGING_IO)) {
                 logger.error("Failed to read PML4 the first time.");
                 return false;
             }
 
-            if (!VMMDLL_MemReadEx(this->dma.handle.get(), -1, dtb, reinterpret_cast<PBYTE>(pml4_second), sizeof(pml4_second), &read_size,
+            if (!VMMDLL_MemReadEx(this->dma.get_handle(), -1, dtb, reinterpret_cast<PBYTE>(pml4_second), sizeof(pml4_second), &read_size,
                 VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_NOPAGING | VMMDLL_FLAG_ZEROPAD_ON_FAIL | VMMDLL_FLAG_NOPAGING_IO)) {
                 logger.error("Failed to read PML4 the second time.");
                 return false;
@@ -223,8 +225,8 @@ bool Process::fix_cr3(const std::string& process_name) {
                 return false;
             }
 
-            VMMDLL_MemReadEx((VMM_HANDLE)-666, 333, (ULONG64)pml4_first, nullptr, 0, nullptr, 0);
-            VMMDLL_ConfigSet(this->dma.handle.get(), VMMDLL_OPT_PROCESS_DTB | this->process_id, 666);
+            VMMDLL_MemReadEx(reinterpret_cast<VMM_HANDLE>(static_cast<intptr_t>(-666)), 333, reinterpret_cast<ULONG64>(pml4_first), nullptr, 0, nullptr, 0);
+            VMMDLL_ConfigSet(this->dma.get_handle(), VMMDLL_OPT_PROCESS_DTB | this->process_id, 666);
 
             return true;
         }
@@ -239,7 +241,7 @@ bool Process::virtual_to_physical(uint64_t virtual_address, uint64_t& physical_a
         return false;
     }
 
-    return VMMDLL_VirtualToPhysical(this->dma.handle.get(), virtual_address, &physical_address);
+    return VMMDLL_VirtualToPhysical(this->dma.get_handle(), virtual_address, &physical_address);
 }
 
 bool Process::read(uint64_t address, void* buffer, size_t size) const {
@@ -248,7 +250,7 @@ bool Process::read(uint64_t address, void* buffer, size_t size) const {
     }
 
     DWORD read_size = 0;
-    if (!VMMDLL_MemReadEx(this->dma.handle.get(), this->process_id, address, static_cast<PBYTE>(buffer), size, &read_size, VMMDLL_FLAG_NOCACHE)) {
+    if (!VMMDLL_MemReadEx(this->dma.get_handle(), this->process_id, address, static_cast<PBYTE>(buffer), static_cast<DWORD>(size), &read_size, VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_ZEROPAD_ON_FAIL)) {
         logger.error("Failed to read memory at 0x{:x} (PID: {}).", address, this->process_id);
         return false;
     }
@@ -257,21 +259,22 @@ bool Process::read(uint64_t address, void* buffer, size_t size) const {
 }
 
 uint64_t Process::read_chain(uint64_t base, const std::vector<uint64_t>& offsets) const {
-    uint64_t result = this->read<uint64_t>(base + offsets.at(0));
-    for (size_t i = 1; i < offsets.size(); ++i) {
-        result = this->read<uint64_t>(result + offsets.at(i));
+    if (offsets.empty()) return 0;
+    uint64_t result = base;
+    for (size_t i = 0; i + 1 < offsets.size(); ++i) {
+        result = this->read<uint64_t>(result + offsets[i]);
     }
-    return result;
+    return this->read<uint64_t>(result + offsets.back());
 }
 
-bool Process::write(uint64_t address, void* buffer, size_t size, DWORD process_id) const {
+bool Process::write(uint64_t address, void* buffer, size_t size, uint32_t process_id) const {
     if (!this->is_valid_address(address)) {
         return false;
     }
 
     DWORD target_process_id = (process_id == 0) ? this->process_id : process_id;
 
-    if (!VMMDLL_MemWrite(this->dma.handle.get(), target_process_id, address, static_cast<PBYTE>(buffer), size)) {
+    if (!VMMDLL_MemWrite(this->dma.get_handle(), target_process_id, address, static_cast<PBYTE>(buffer), static_cast<DWORD>(size))) {
         logger.error("Failed to write memory at 0x{:x} (PID: {}).", address, target_process_id);
         return false;
     }
@@ -279,9 +282,9 @@ bool Process::write(uint64_t address, void* buffer, size_t size, DWORD process_i
     return true;
 }
 
-VMMDLL_SCATTER_HANDLE Process::create_scatter(DWORD process_id) const {
+VMMDLL_SCATTER_HANDLE Process::create_scatter(uint32_t process_id) const {
     DWORD target_process_id = (process_id != 0) ? process_id : this->process_id;
-    VMMDLL_SCATTER_HANDLE scatter_handle = VMMDLL_Scatter_Initialize(this->dma.handle.get(), target_process_id, scatter_flags);
+    VMMDLL_SCATTER_HANDLE scatter_handle = VMMDLL_Scatter_Initialize(this->dma.get_handle(), target_process_id, scatter_flags);
     if (!scatter_handle) {
         logger.error("Failed to create scatter handle.");
     }
@@ -300,7 +303,7 @@ bool Process::add_read_scatter(VMMDLL_SCATTER_HANDLE scatter_handle, uint64_t ad
         return false;
     }
 
-    if (!VMMDLL_Scatter_PrepareEx(scatter_handle, address, size, static_cast<PBYTE>(buffer), NULL)) {
+    if (!VMMDLL_Scatter_PrepareEx(scatter_handle, address, static_cast<DWORD>(size), static_cast<PBYTE>(buffer), NULL)) {
         logger.error("Failed to prepare scatter read at 0x{:x}.", address);
         return false;
     }
@@ -314,7 +317,7 @@ bool Process::add_write_scatter(VMMDLL_SCATTER_HANDLE scatter_handle, uint64_t a
         return false;
     }
 
-    if (!VMMDLL_Scatter_PrepareWrite(scatter_handle, address, static_cast<PBYTE>(buffer), size)) {
+    if (!VMMDLL_Scatter_PrepareWrite(scatter_handle, address, static_cast<PBYTE>(buffer), static_cast<DWORD>(size))) {
         logger.error("Failed to prepare scatter write at 0x{:x}.", address);
         return false;
     }
@@ -323,7 +326,7 @@ bool Process::add_write_scatter(VMMDLL_SCATTER_HANDLE scatter_handle, uint64_t a
     return true;
 }
 
-bool Process::execute_scatter(VMMDLL_SCATTER_HANDLE scatter_handle, DWORD process_id) const {
+bool Process::execute_scatter(VMMDLL_SCATTER_HANDLE scatter_handle, uint32_t process_id) const {
     auto it = this->scatter_counts.find(scatter_handle);
     if (it == this->scatter_counts.end() || it->second == 0) {
         return true;

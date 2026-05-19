@@ -15,19 +15,19 @@
 static constexpr Volk::Log::Logger logger{ "DMA" };
 
 template<typename T>
-T DMA::read(uint64_t address, DWORD process_id) const {
+T DMA::read(uint64_t address, uint32_t process_id) const {
     T rdbuf = {};
     VMMDLL_MemReadEx(this->handle.get(), process_id, address,
         reinterpret_cast<PBYTE>(&rdbuf),
-        sizeof(T), nullptr,
+        static_cast<DWORD>(sizeof(T)), nullptr,
         VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_ZEROPAD_ON_FAIL);
     return rdbuf;
 }
 
-template uint64_t DMA::read<uint64_t>(uint64_t, DWORD) const;
-template uint32_t DMA::read<uint32_t>(uint64_t, DWORD) const;
-template int DMA::read<int>(uint64_t, DWORD) const;
-template InputState::Point DMA::read<InputState::Point>(uint64_t, DWORD) const;
+template uint64_t DMA::read<uint64_t>(uint64_t, uint32_t) const;
+template uint32_t DMA::read<uint32_t>(uint64_t, uint32_t) const;
+template int DMA::read<int>(uint64_t, uint32_t) const;
+template InputState::Point DMA::read<InputState::Point>(uint64_t, uint32_t) const;
 
 DMA::DMA(bool use_memory_map) {
     LPCSTR argv[8] = {"", "-device", "fpga://algo=0", "", "", "", "", ""};
@@ -55,7 +55,7 @@ DMA::DMA(bool use_memory_map) {
     this->clean_fpga();
 }
 
-DWORD DMA::get_process_id(const std::string& process_name) const {
+uint32_t DMA::get_process_id(const std::string& process_name) const {
     DWORD process_id = 0;
 
     if (!VMMDLL_PidGetFromName(this->handle.get(), process_name.c_str(), &process_id) || process_id == 0) {
@@ -65,8 +65,8 @@ DWORD DMA::get_process_id(const std::string& process_name) const {
     return process_id;
 }
 
-std::vector<DWORD> DMA::get_process_id_list(const std::string& process_name) const {
-    std::vector<DWORD> list = { };
+std::vector<uint32_t> DMA::get_process_id_list(const std::string& process_name) const {
+    std::vector<uint32_t> list = { };
 
     VolkResource<VMMDLL_PROCESS_INFORMATION> process_info{};
     DWORD total_processes = 0;
@@ -86,7 +86,7 @@ std::vector<DWORD> DMA::get_process_id_list(const std::string& process_name) con
     return list;
 }
 
-uint64_t DMA::find_signature(const char* signature, uint64_t range_start, uint64_t range_end, DWORD process_id) const {
+uint64_t DMA::find_signature(const char* signature, uint64_t range_start, uint64_t range_end, uint32_t process_id) const {
     if (!signature || !*signature || range_start >= range_end) {
         return 0;
     }
@@ -94,7 +94,7 @@ uint64_t DMA::find_signature(const char* signature, uint64_t range_start, uint64
     uint64_t size = range_end - range_start;
     std::vector<uint8_t> buffer(size);
 
-    if (!VMMDLL_MemReadEx(this->handle.get(), process_id, range_start, buffer.data(), size, nullptr, VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_ZEROPAD_ON_FAIL)) {
+    if (!VMMDLL_MemReadEx(this->handle.get(), process_id, range_start, buffer.data(), static_cast<DWORD>(size), nullptr, VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_ZEROPAD_ON_FAIL)) {
         return 0;
     }
 
@@ -116,7 +116,8 @@ uint64_t DMA::find_signature(const char* signature, uint64_t range_start, uint64
                 first_match = range_start + i;
             }
 
-            pat += (*pat == '?') ? 2 : 3;
+            pat += (*pat == '?') ? 1 : 2;
+            if (*pat == ' ') ++pat;
 
             if (*pat == '\0') {
                 return first_match;

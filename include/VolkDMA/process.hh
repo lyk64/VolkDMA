@@ -1,12 +1,12 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 class DMA;
 using VMMDLL_SCATTER_HANDLE = void*;
-using DWORD = unsigned long;
 
 class Process {
 public:
@@ -15,18 +15,18 @@ public:
     [[nodiscard]] size_t get_size(const std::string& module_name) const;
     bool dump_module(const std::string& module_name, const std::string& path) const;
     [[nodiscard]] std::string get_path(const std::string& module_name) const;
-    [[nodiscard]] std::vector<std::string> get_modules(DWORD process_id = 0) const;
+    [[nodiscard]] std::vector<std::string> get_modules(uint32_t process_id = 0) const;
     bool fix_cr3(const std::string& process_name);
-    [[nodiscard]] constexpr bool is_valid_address(const uint64_t address) const { return address >= 0x1000; }
+    [[nodiscard]] bool is_valid_address(uint64_t address) const noexcept { return address >= 0x1000; }
     bool virtual_to_physical(uint64_t virtual_address, uint64_t& physical_address) const;
     bool read(uint64_t address, void* buffer, size_t size) const;
     [[nodiscard]] uint64_t read_chain(uint64_t base, const std::vector<uint64_t>& offsets) const;
-    bool write(uint64_t address, void* buffer, size_t size, DWORD process_id = 0) const;
-    [[nodiscard]] VMMDLL_SCATTER_HANDLE create_scatter(DWORD process_id = 0) const;
+    [[nodiscard]] bool write(uint64_t address, void* buffer, size_t size, uint32_t process_id = 0) const;
+    [[nodiscard]] VMMDLL_SCATTER_HANDLE create_scatter(uint32_t process_id = 0) const;
     void close_scatter(VMMDLL_SCATTER_HANDLE scatter_handle) const;
     bool add_read_scatter(VMMDLL_SCATTER_HANDLE scatter_handle, uint64_t address, void* buffer, size_t size) const;
     bool add_write_scatter(VMMDLL_SCATTER_HANDLE scatter_handle, uint64_t address, void* buffer, size_t size) const;
-    bool execute_scatter(VMMDLL_SCATTER_HANDLE scatter_handle, DWORD process_id = 0) const;
+    bool execute_scatter(VMMDLL_SCATTER_HANDLE scatter_handle, uint32_t process_id = 0) const;
 
     template <typename T>
     [[nodiscard]] T read(uint64_t address) const {
@@ -37,15 +37,16 @@ public:
 
     template <typename T>
     [[nodiscard]] T read_chain(uint64_t base, const std::vector<uint64_t>& offsets) const {
-        uint64_t result = this->read<uint64_t>(base + offsets.at(0));
-        for (size_t i = 1; i < offsets.size() - 1; ++i) {
-            result = this->read<uint64_t>(result + offsets.at(i));
+        if (offsets.empty()) return {};
+        uint64_t result = base;
+        for (size_t i = 0; i + 1 < offsets.size(); ++i) {
+            result = this->read<uint64_t>(result + offsets[i]);
         }
         return this->read<T>(result + offsets.back());
     }
 
     template <typename T>
-    bool write(uint64_t address, T value, DWORD process_id = 0) const {
+    bool write(uint64_t address, T value, uint32_t process_id = 0) const {
         return this->write(address, &value, sizeof(T), process_id);
     }
 
@@ -61,7 +62,7 @@ public:
 
 private:
     const DMA& dma;
-    const DWORD process_id;
+    const uint32_t process_id;
     
     mutable std::unordered_map<VMMDLL_SCATTER_HANDLE, int> scatter_counts;
 };

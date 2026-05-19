@@ -10,7 +10,7 @@
 static constexpr Volk::Log::Logger logger{ "INPUTSTATE" };
 
 InputState::InputState(const DMA& dma) : dma(dma) {
-    const std::vector<DWORD> csrss_process_ids = dma.get_process_id_list("csrss.exe");
+    const auto csrss_process_ids = dma.get_process_id_list("csrss.exe");
 
     if (retrieve_gptCursorAsync(csrss_process_ids)) {
         logger.info("Successfully retrieved gptCursorAsync.");
@@ -19,7 +19,7 @@ InputState::InputState(const DMA& dma) : dma(dma) {
         logger.error("Failed to retrieve gptCursorAsync.");
     }
 
-    if (!VMMDLL_ConfigGet(dma.handle.get(), VMMDLL_OPT_WIN_VERSION_BUILD, &windows_version_build)) {
+    if (!VMMDLL_ConfigGet(dma.get_handle(), VMMDLL_OPT_WIN_VERSION_BUILD, &windows_version_build)) {
         logger.error("Failed to retrieve Windows build.");
         return;
     }
@@ -32,7 +32,7 @@ InputState::InputState(const DMA& dma) : dma(dma) {
     }
 }
 
-bool InputState::retrieve_gafAsyncKeyState(const std::vector<DWORD>& csrss_process_ids) {
+bool InputState::retrieve_gafAsyncKeyState(const std::vector<uint32_t>& csrss_process_ids) {
     winlogon_process_id = dma.get_process_id("winlogon.exe");
     if (!winlogon_process_id) {
         logger.error("Failed to get process ID for winlogon.exe.");
@@ -45,13 +45,13 @@ bool InputState::retrieve_gafAsyncKeyState(const std::vector<DWORD>& csrss_proce
             return false;
         }
 
-        for (const DWORD& process_id : csrss_process_ids) {
+        for (const uint32_t process_id : csrss_process_ids) {
             VolkResource<VMMDLL_MAP_MODULEENTRY> win32k_module_info{};
             std::string_view win32k_module_name;
-            if (VMMDLL_Map_GetModuleFromNameW(dma.handle.get(), process_id, const_cast<LPWSTR>(L"win32ksgd.sys"), win32k_module_info.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
+            if (VMMDLL_Map_GetModuleFromNameW(dma.get_handle(), process_id, const_cast<LPWSTR>(L"win32ksgd.sys"), win32k_module_info.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
                 win32k_module_name = "win32ksgd.sys";
             }
-            else if (VMMDLL_Map_GetModuleFromNameW(dma.handle.get(), process_id, const_cast<LPWSTR>(L"win32k.sys"), win32k_module_info.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
+            else if (VMMDLL_Map_GetModuleFromNameW(dma.get_handle(), process_id, const_cast<LPWSTR>(L"win32k.sys"), win32k_module_info.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
                 win32k_module_name = "win32k.sys";
             }
             else {
@@ -76,7 +76,7 @@ bool InputState::retrieve_gafAsyncKeyState(const std::vector<DWORD>& csrss_proce
             }
 
             VolkResource<VMMDLL_MAP_MODULEENTRY> win32kbase_info{};
-            if (!VMMDLL_Map_GetModuleFromNameW(dma.handle.get(), process_id, const_cast<LPWSTR>(L"win32kbase.sys"), win32kbase_info.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
+            if (!VMMDLL_Map_GetModuleFromNameW(dma.get_handle(), process_id, const_cast<LPWSTR>(L"win32kbase.sys"), win32kbase_info.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
                 logger.error("Failed to find win32kbase.sys for csrss.exe (PID: {}).", process_id);
                 continue;
             }
@@ -99,7 +99,7 @@ bool InputState::retrieve_gafAsyncKeyState(const std::vector<DWORD>& csrss_proce
 
     // windows_version_build <= 22000
     VolkResource<VMMDLL_MAP_EAT> eat_map{};
-    if (!VMMDLL_Map_GetEATU(dma.handle.get(), winlogon_process_id | VMMDLL_PID_PROCESS_WITH_KERNELMEMORY, const_cast<LPSTR>("win32kbase.sys"), eat_map.out()) || eat_map->dwVersion != VMMDLL_MAP_EAT_VERSION) {
+    if (!VMMDLL_Map_GetEATU(dma.get_handle(), winlogon_process_id | VMMDLL_PID_PROCESS_WITH_KERNELMEMORY, const_cast<LPSTR>("win32kbase.sys"), eat_map.out()) || eat_map->dwVersion != VMMDLL_MAP_EAT_VERSION) {
         logger.error("Failed to retrieve EAT map in win32kbase.sys for winlogon.exe (PID: {}).", winlogon_process_id);
         return false;
     }
@@ -115,15 +115,17 @@ bool InputState::retrieve_gafAsyncKeyState(const std::vector<DWORD>& csrss_proce
     return gafAsyncKeyState_address > 0x7FFFFFFFFFFF;
 }
 
-bool InputState::retrieve_gptCursorAsync(const std::vector<DWORD>& csrss_process_ids) {
+bool InputState::retrieve_gptCursorAsync(const std::vector<uint32_t>& csrss_process_ids) {
     if (csrss_process_ids.empty()) {
         logger.error("No csrss.exe processes found.");
         return false;
     }
 
-    for (const DWORD& process_id : csrss_process_ids) {
+    for (const uint32_t process_id : csrss_process_ids) {
+        if (gptCursorAsync_address) break;
+
         VolkResource<VMMDLL_MAP_EAT> eat_map;
-        if (!VMMDLL_Map_GetEATU(dma.handle.get(), process_id | VMMDLL_PID_PROCESS_WITH_KERNELMEMORY, const_cast<LPSTR>("win32kbase.sys"), eat_map.out())) {
+        if (!VMMDLL_Map_GetEATU(dma.get_handle(), process_id | VMMDLL_PID_PROCESS_WITH_KERNELMEMORY, const_cast<LPSTR>("win32kbase.sys"), eat_map.out())) {
             logger.error("Failed to retrieve EAT map in win32kbase.sys for csrss.exe (PID: {}).", process_id);
             continue;
         }
@@ -160,7 +162,7 @@ InputState::Point InputState::get_cursor_position() const {
 
 bool InputState::read_bitmap() {
     prev_bitmap = state_bitmap;
-    return VMMDLL_MemReadEx(dma.handle.get(), winlogon_process_id | VMMDLL_PID_PROCESS_WITH_KERNELMEMORY, gafAsyncKeyState_address, reinterpret_cast<PBYTE>(&state_bitmap), sizeof(state_bitmap), nullptr, VMMDLL_FLAG_NOCACHE);
+    return VMMDLL_MemReadEx(dma.get_handle(), winlogon_process_id | VMMDLL_PID_PROCESS_WITH_KERNELMEMORY, gafAsyncKeyState_address, reinterpret_cast<PBYTE>(&state_bitmap), static_cast<DWORD>(sizeof(state_bitmap)), nullptr, VMMDLL_FLAG_NOCACHE);
 }
 
 bool InputState::get_bit(const std::array<uint8_t, 64>& bitmap, uint8_t virtual_key_code) const {

@@ -7,8 +7,6 @@
 
 class DMA;
 
-using DWORD = unsigned long;
-
 class InputState {
 public:
     explicit InputState(const DMA& dma);
@@ -194,15 +192,15 @@ private:
 
     uint64_t windows_version_build{};
 
-    DWORD gptCursorAsync_process_id{};
+    uint32_t gptCursorAsync_process_id{};
     uint64_t gptCursorAsync_address{};
 
-    DWORD winlogon_process_id{};
+    uint32_t winlogon_process_id{};
     uint64_t gafAsyncKeyState_address{};
     std::array<uint8_t, 64> state_bitmap{};
     std::array<uint8_t, 64> prev_bitmap{};
 
     [[nodiscard]] bool get_bit(const std::array<uint8_t, 64>& bitmap, uint8_t virtual_key_code) const;
-    [[nodiscard]] bool retrieve_gafAsyncKeyState(const std::vector<DWORD>& csrss_process_ids);
-    [[nodiscard]] bool retrieve_gptCursorAsync(const std::vector<DWORD>& csrss_process_ids);
+    [[nodiscard]] bool retrieve_gafAsyncKeyState(const std::vector<uint32_t>& csrss_process_ids);
+    [[nodiscard]] bool retrieve_gptCursorAsync(const std::vector<uint32_t>& csrss_process_ids);
 };
