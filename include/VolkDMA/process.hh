@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
@@ -53,6 +54,14 @@ public:
     template <typename T>
     bool add_read_scatter(VMMDLL_SCATTER_HANDLE scatter_handle, uint64_t address, T* buffer) const {
         return this->add_read_scatter(scatter_handle, address, reinterpret_cast<void*>(buffer), sizeof(T));
+    }
+
+    template <typename T>
+        requires std::is_trivially_copyable_v<T>
+    bool add_read_scatter(VMMDLL_SCATTER_HANDLE scatter_handle, uint64_t address, std::vector<T>& buffer, size_t count) const {
+        buffer.resize(count);
+        if (count == 0) return false;
+        return this->add_read_scatter(scatter_handle, address, buffer.data(), count * sizeof(T));
     }
 
     template <typename T>
