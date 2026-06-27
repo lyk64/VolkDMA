@@ -2,6 +2,7 @@
 
 #include <VolkLog/log.hh>
 
+#include <algorithm>
 #include <cstring>
 #include <filesystem>
 #include <memory>
@@ -265,6 +266,13 @@ uint64_t Process::read_chain(uint64_t base, const std::vector<uint64_t>& offsets
         result = this->read<uint64_t>(result + offsets[i]);
     }
     return this->read<uint64_t>(result + offsets.back());
+}
+
+std::string Process::read_string(uint64_t address, size_t max_length) const {
+    std::string buffer(max_length, '\0');
+    this->read(address, buffer.data(), max_length);
+    buffer.erase(std::ranges::find(buffer, '\0'), buffer.end());
+    return buffer;
 }
 
 bool Process::write(uint64_t address, void* buffer, size_t size, uint32_t process_id) const {
