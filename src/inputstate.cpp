@@ -66,16 +66,16 @@ bool InputState::retrieve_gafAsyncKeyState(const std::vector<uint32_t>& csrss_pr
                 continue;
             }
 
-            uint64_t g_session_address = dma.find_signature("48 8B 05 ? ? ? ? 48 8B 04 C8", win32k_module_info->vaBase, win32k_module_info->vaBase + win32k_module_info->cbImageSize, process_id);
+            const Process csrss_process(dma, process_id);
+
+            uint64_t g_session_address = csrss_process.find_signature("48 8B 05 ? ? ? ? 48 8B 04 C8", win32k_module_info->vaBase, win32k_module_info->vaBase + win32k_module_info->cbImageSize);
             if (!g_session_address)
-                g_session_address = dma.find_signature("48 8B 05 ? ? ? ? FF C9", win32k_module_info->vaBase, win32k_module_info->vaBase + win32k_module_info->cbImageSize, process_id);
+                g_session_address = csrss_process.find_signature("48 8B 05 ? ? ? ? FF C9", win32k_module_info->vaBase, win32k_module_info->vaBase + win32k_module_info->cbImageSize);
 
             if (!g_session_address) {
                 logger.error("Failed to find signature in {} for csrss.exe (PID: {}).", win32k_module_name, process_id);
                 continue;
             }
-
-            const Process csrss_process(dma, process_id);
 
             uint64_t user_session_state = 0;
             for (int i = 0; i < 4; i++) {
@@ -90,7 +90,7 @@ bool InputState::retrieve_gafAsyncKeyState(const std::vector<uint32_t>& csrss_pr
                 continue;
             }
 
-            uint64_t sig_ptr = dma.find_signature("48 8D 90 ? ? ? ? E8 ? ? ? ? 0F 57 C0", win32kbase_info->vaBase, win32kbase_info->vaBase + win32kbase_info->cbImageSize, process_id);
+            uint64_t sig_ptr = csrss_process.find_signature("48 8D 90 ? ? ? ? E8 ? ? ? ? 0F 57 C0", win32kbase_info->vaBase, win32kbase_info->vaBase + win32kbase_info->cbImageSize);
             if (!sig_ptr) {
                 logger.error("Failed to find signature in win32kbase.sys for csrss.exe (PID: {}).", process_id);
                 continue;

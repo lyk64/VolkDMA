@@ -20,7 +20,6 @@ public:
 
     [[nodiscard]] uint32_t get_process_id(const std::string& process_name) const;
     [[nodiscard]] std::vector<uint32_t> get_process_id_list(const std::string& process_name) const;
-    [[nodiscard]] uint64_t find_signature(const char* signature, uint64_t range_start, uint64_t range_end, uint32_t process_id) const;
 
 private:
     VolkHandle handle{};

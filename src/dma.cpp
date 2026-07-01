@@ -2,7 +2,6 @@
 
 #include <VolkLog/log.hh>
 
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -68,52 +67,6 @@ std::vector<uint32_t> DMA::get_process_id_list(const std::string& process_name) 
     }
 
     return list;
-}
-
-uint64_t DMA::find_signature(const char* signature, uint64_t range_start, uint64_t range_end, uint32_t process_id) const {
-    if (!signature || !*signature || range_start >= range_end) {
-        return 0;
-    }
-
-    uint64_t size = range_end - range_start;
-    std::vector<uint8_t> buffer(size);
-
-    if (!VMMDLL_MemReadEx(this->handle.get(), process_id, range_start, buffer.data(), static_cast<DWORD>(size), nullptr, VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_ZEROPAD_ON_FAIL)) {
-        return 0;
-    }
-
-    const char* pat = signature;
-    uint64_t first_match = 0;
-
-    auto get_byte = [](const char* hex) -> uint8_t {
-        char byte[3] = { hex[0], hex[1], 0 };
-        return static_cast<uint8_t>(std::strtoul(byte, nullptr, 16));
-    };
-
-    for (uint64_t i = 0; i < size; i++) {
-        if (*pat == '\0') {
-            break;
-        }
-
-        if (*pat == '?' || buffer[i] == get_byte(pat)) {
-            if (!first_match) {
-                first_match = range_start + i;
-            }
-
-            pat += (*pat == '?') ? 1 : 2;
-            if (*pat == ' ') ++pat;
-
-            if (*pat == '\0') {
-                return first_match;
-            }
-        }
-        else {
-            pat = signature;
-            first_match = 0;
-        }
-    }
-
-    return 0;
 }
 
 bool DMA::dump_memory_map() {

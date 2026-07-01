@@ -22,6 +22,7 @@ public:
     bool read(uint64_t address, void* buffer, size_t size) const;
     [[nodiscard]] uint64_t read_chain(uint64_t base, const std::vector<uint64_t>& offsets) const;
     [[nodiscard]] std::string read_string(uint64_t address, size_t max_length = 256) const;
+    [[nodiscard]] uint64_t find_signature(const char* signature, uint64_t range_start, uint64_t range_end) const;
     [[nodiscard]] bool write(uint64_t address, const void* buffer, size_t size, uint32_t process_id = 0) const;
     [[nodiscard]] Scatter create_scatter(uint32_t process_id = 0) const;
 
