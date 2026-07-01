@@ -28,7 +28,7 @@ Scatter::Scatter(Scatter&& other) noexcept : process_id(other.process_id), handl
     other.pending_count = 0;
 }
 
-bool Scatter::read(uint64_t address, void* buffer, size_t size) {
+bool Scatter::prepare_read(uint64_t address, void* buffer, size_t size) {
     if (!this->is_valid_address(address)) {
         return false;
     }
@@ -42,7 +42,7 @@ bool Scatter::read(uint64_t address, void* buffer, size_t size) {
     return true;
 }
 
-bool Scatter::write(uint64_t address, const void* buffer, size_t size) {
+bool Scatter::prepare_write(uint64_t address, const void* buffer, size_t size) {
     if (!this->is_valid_address(address)) {
         return false;
     }

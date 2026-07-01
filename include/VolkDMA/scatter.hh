@@ -18,26 +18,26 @@ public:
 
     [[nodiscard]] bool is_valid_address(uint64_t address) const noexcept { return address >= 0x1000; }
 
-    bool read(uint64_t address, void* buffer, size_t size);
-    bool write(uint64_t address, const void* buffer, size_t size);
+    bool prepare_read(uint64_t address, void* buffer, size_t size);
+    bool prepare_write(uint64_t address, const void* buffer, size_t size);
     bool execute();
 
     template <typename T>
-    bool read(uint64_t address, T* buffer) {
-        return this->read(address, reinterpret_cast<void*>(buffer), sizeof(T));
+    bool prepare_read(uint64_t address, T* buffer) {
+        return this->prepare_read(address, reinterpret_cast<void*>(buffer), sizeof(T));
     }
 
     template <typename T>
         requires std::is_trivially_copyable_v<T>
-    bool read(uint64_t address, std::vector<T>& buffer, size_t count) {
+    bool prepare_read(uint64_t address, std::vector<T>& buffer, size_t count) {
         buffer.resize(count);
         if (count == 0) return false;
-        return this->read(address, buffer.data(), count * sizeof(T));
+        return this->prepare_read(address, buffer.data(), count * sizeof(T));
     }
 
     template <typename T>
-    bool write(uint64_t address, const T& value) {
-        return this->write(address, &value, sizeof(T));
+    bool prepare_write(uint64_t address, const T& value) {
+        return this->prepare_write(address, &value, sizeof(T));
     }
 
 private:
