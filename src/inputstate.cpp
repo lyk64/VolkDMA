@@ -75,9 +75,11 @@ bool InputState::retrieve_gafAsyncKeyState(const std::vector<uint32_t>& csrss_pr
                 continue;
             }
 
+            const Process csrss_process(dma, process_id);
+
             uint64_t user_session_state = 0;
             for (int i = 0; i < 4; i++) {
-                user_session_state = dma.read<uint64_t>(dma.read<uint64_t>(dma.read<uint64_t>(g_session_address + 7 + dma.read<int>(g_session_address + 3, process_id), process_id) + 8 * i, process_id), process_id);
+                user_session_state = csrss_process.read<uint64_t>(csrss_process.read<uint64_t>(csrss_process.read<uint64_t>(g_session_address + 7 + csrss_process.read<int>(g_session_address + 3)) + 8 * i));
                 if (is_kernel_address(user_session_state))
                     break;
             }
@@ -94,7 +96,7 @@ bool InputState::retrieve_gafAsyncKeyState(const std::vector<uint32_t>& csrss_pr
                 continue;
             }
 
-            gafAsyncKeyState_address = user_session_state + dma.read<uint32_t>(sig_ptr + 3, process_id);
+            gafAsyncKeyState_address = user_session_state + csrss_process.read<uint32_t>(sig_ptr + 3);
 
             if (is_kernel_address(gafAsyncKeyState_address)) {
                 return true;

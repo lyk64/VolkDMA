@@ -13,20 +13,6 @@
 
 static constexpr Volk::Log::Logger logger{ "DMA" };
 
-template<typename T>
-T DMA::read(uint64_t address, uint32_t process_id) const {
-    T rdbuf = {};
-    VMMDLL_MemReadEx(this->handle.get(), process_id, address,
-        reinterpret_cast<PBYTE>(&rdbuf),
-        static_cast<DWORD>(sizeof(T)), nullptr,
-        VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_ZEROPAD_ON_FAIL);
-    return rdbuf;
-}
-
-template uint64_t DMA::read<uint64_t>(uint64_t, uint32_t) const;
-template uint32_t DMA::read<uint32_t>(uint64_t, uint32_t) const;
-template int DMA::read<int>(uint64_t, uint32_t) const;
-
 DMA::DMA(bool use_memory_map) {
     LPCSTR argv[8] = {"", "-device", "fpga://algo=0", "", "", "", "", ""};
     DWORD argc = 3;

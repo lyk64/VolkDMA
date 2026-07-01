@@ -22,9 +22,6 @@ public:
     [[nodiscard]] std::vector<uint32_t> get_process_id_list(const std::string& process_name) const;
     [[nodiscard]] uint64_t find_signature(const char* signature, uint64_t range_start, uint64_t range_end, uint32_t process_id) const;
 
-    template<typename T>
-    [[nodiscard]] T read(uint64_t address, uint32_t process_id) const;
-
 private:
     VolkHandle handle{};
     bool dump_memory_map();
