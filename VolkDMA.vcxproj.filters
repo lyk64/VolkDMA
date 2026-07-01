@@ -45,6 +45,9 @@
     <ClInclude Include="include\VolkDMA\process.hh">
       <Filter>include\VolkDMA</Filter>
     </ClInclude>
+    <ClInclude Include="include\VolkDMA\scatter.hh">
+      <Filter>include\VolkDMA</Filter>
+    </ClInclude>
     <ClInclude Include="include\VolkDMA\internal\volkresource.hh">
       <Filter>include\VolkDMA\internal</Filter>
     </ClInclude>
@@ -65,6 +68,9 @@
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\process.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\scatter.cpp">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>

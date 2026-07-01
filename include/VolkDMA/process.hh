@@ -2,12 +2,10 @@
 
 #include <cstdint>
 #include <string>
-#include <type_traits>
-#include <unordered_map>
 #include <vector>
 
 class DMA;
-using VMMDLL_SCATTER_HANDLE = void*;
+class Scatter;
 
 class Process {
 public:
@@ -25,11 +23,7 @@ public:
     [[nodiscard]] uint64_t read_chain(uint64_t base, const std::vector<uint64_t>& offsets) const;
     [[nodiscard]] std::string read_string(uint64_t address, size_t max_length = 256) const;
     [[nodiscard]] bool write(uint64_t address, const void* buffer, size_t size, uint32_t process_id = 0) const;
-    [[nodiscard]] VMMDLL_SCATTER_HANDLE create_scatter(uint32_t process_id = 0) const;
-    void close_scatter(VMMDLL_SCATTER_HANDLE scatter_handle) const;
-    bool add_read_scatter(VMMDLL_SCATTER_HANDLE scatter_handle, uint64_t address, void* buffer, size_t size) const;
-    bool add_write_scatter(VMMDLL_SCATTER_HANDLE scatter_handle, uint64_t address, const void* buffer, size_t size) const;
-    bool execute_scatter(VMMDLL_SCATTER_HANDLE scatter_handle, uint32_t process_id = 0) const;
+    [[nodiscard]] Scatter create_scatter(uint32_t process_id = 0) const;
 
     template <typename T>
     [[nodiscard]] T read(uint64_t address) const {
@@ -53,27 +47,7 @@ public:
         return this->write(address, &value, sizeof(T), process_id);
     }
 
-    template <typename T>
-    bool add_read_scatter(VMMDLL_SCATTER_HANDLE scatter_handle, uint64_t address, T* buffer) const {
-        return this->add_read_scatter(scatter_handle, address, reinterpret_cast<void*>(buffer), sizeof(T));
-    }
-
-    template <typename T>
-        requires std::is_trivially_copyable_v<T>
-    bool add_read_scatter(VMMDLL_SCATTER_HANDLE scatter_handle, uint64_t address, std::vector<T>& buffer, size_t count) const {
-        buffer.resize(count);
-        if (count == 0) return false;
-        return this->add_read_scatter(scatter_handle, address, buffer.data(), count * sizeof(T));
-    }
-
-    template <typename T>
-    bool add_write_scatter(VMMDLL_SCATTER_HANDLE scatter_handle, uint64_t address, const T& value) const {
-        return this->add_write_scatter(scatter_handle, address, &value, sizeof(T));
-    }
-
 private:
     const DMA& dma;
     const uint32_t process_id;
-    
-    mutable std::unordered_map<VMMDLL_SCATTER_HANDLE, int> scatter_counts;
 };

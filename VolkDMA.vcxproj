@@ -18,6 +18,7 @@
     <ClInclude Include="include\VolkDMA\inputstate.hh" />
     <ClInclude Include="include\VolkDMA\internal\volkresource.hh" />
     <ClInclude Include="include\VolkDMA\process.hh" />
+    <ClInclude Include="include\VolkDMA\scatter.hh" />
   </ItemGroup>
   <ItemGroup>
     <Library Include="external\leechcore\leechcore.lib" />
@@ -27,6 +28,7 @@
     <ClCompile Include="src\dma.cpp" />
     <ClCompile Include="src\inputstate.cpp" />
     <ClCompile Include="src\process.cpp" />
+    <ClCompile Include="src\scatter.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

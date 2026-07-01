@@ -15,10 +15,9 @@
 
 #include "include/VolkDMA/dma.hh"
 #include "include/VolkDMA/internal/volkresource.hh"
+#include "include/VolkDMA/scatter.hh"
 
 static constexpr Volk::Log::Logger logger{ "PROCESS" };
-
-static constexpr DWORD scatter_flags = VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_ZEROPAD_ON_FAIL | VMMDLL_FLAG_SCATTER_PREPAREEX_NOMEMZERO;
 
 static uint64_t cb_size = 0x80000;
 VOID cb_add_file(_Inout_ HANDLE h, _In_ LPCSTR uszName, _In_ ULONG64 cb, _In_opt_ PVMMDLL_VFS_FILELIST_EXINFO pExInfo) {
@@ -291,70 +290,6 @@ bool Process::write(uint64_t address, const void* buffer, size_t size, uint32_t 
     return true;
 }
 
-VMMDLL_SCATTER_HANDLE Process::create_scatter(uint32_t process_id) const {
-    DWORD target_process_id = (process_id != 0) ? process_id : this->process_id;
-    VMMDLL_SCATTER_HANDLE scatter_handle = VMMDLL_Scatter_Initialize(this->dma.get_handle(), target_process_id, scatter_flags);
-    if (!scatter_handle) {
-        logger.error("Failed to create scatter handle.");
-    }
-    return scatter_handle;
-}
-
-void Process::close_scatter(VMMDLL_SCATTER_HANDLE scatter_handle) const {
-    if (scatter_handle) {
-        VMMDLL_Scatter_CloseHandle(scatter_handle);
-        this->scatter_counts.erase(scatter_handle);
-    }
-}
-
-bool Process::add_read_scatter(VMMDLL_SCATTER_HANDLE scatter_handle, uint64_t address, void* buffer, size_t size) const {
-    if (!this->is_valid_address(address)) {
-        return false;
-    }
-
-    if (!VMMDLL_Scatter_PrepareEx(scatter_handle, address, static_cast<DWORD>(size), static_cast<PBYTE>(buffer), NULL)) {
-        logger.error("Failed to prepare scatter read at 0x{:x}.", address);
-        return false;
-    }
-    ++this->scatter_counts[scatter_handle];
-
-    return true;
-}
-
-bool Process::add_write_scatter(VMMDLL_SCATTER_HANDLE scatter_handle, uint64_t address, const void* buffer, size_t size) const {
-    if (!this->is_valid_address(address)) {
-        return false;
-    }
-
-    if (!VMMDLL_Scatter_PrepareWrite(scatter_handle, address, static_cast<PBYTE>(const_cast<void*>(buffer)), static_cast<DWORD>(size))) {
-        logger.error("Failed to prepare scatter write at 0x{:x}.", address);
-        return false;
-    }
-    ++this->scatter_counts[scatter_handle];
-
-    return true;
-}
-
-bool Process::execute_scatter(VMMDLL_SCATTER_HANDLE scatter_handle, uint32_t process_id) const {
-    auto it = this->scatter_counts.find(scatter_handle);
-    if (it == this->scatter_counts.end() || it->second == 0) {
-        return true;
-    }
-
-    DWORD target_process_id = (process_id != 0) ? process_id : this->process_id;
-    bool success = true;
-
-    if (!VMMDLL_Scatter_Execute(scatter_handle)) {
-        logger.error("Failed to execute scatter.");
-        success = false;
-    }
-
-    if (!VMMDLL_Scatter_Clear(scatter_handle, target_process_id, scatter_flags)) {
-        logger.error("Failed to clear scatter.");
-        success = false;
-    }
-
-    it->second = 0;
-
-    return success;
+Scatter Process::create_scatter(uint32_t process_id) const {
+    return Scatter(this->dma, (process_id != 0) ? process_id : this->process_id);
 }
