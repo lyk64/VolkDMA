@@ -2,12 +2,19 @@
 
 #include <VolkLog/log.hh>
 
+#include <span>
+
 #include "external/vmm/vmmdll.h"
 
 #include "include/VolkDMA/dma.hh"
 #include "include/VolkDMA/internal/volkresource.hh"
+#include "include/VolkDMA/process.hh"
 
 static constexpr Volk::Log::Logger logger{ "INPUTSTATE" };
+
+[[nodiscard]] static constexpr bool is_kernel_address(uint64_t address) noexcept {
+    return (address >> 47) == 0x1FFFFULL;
+}
 
 InputState::InputState(const DMA& dma) : dma(dma) {
     const auto csrss_process_ids = dma.get_process_id_list("csrss.exe");
@@ -48,10 +55,10 @@ bool InputState::retrieve_gafAsyncKeyState(const std::vector<uint32_t>& csrss_pr
         for (const uint32_t process_id : csrss_process_ids) {
             VolkResource<VMMDLL_MAP_MODULEENTRY> win32k_module_info{};
             std::string_view win32k_module_name;
-            if (VMMDLL_Map_GetModuleFromNameW(dma.get_handle(), process_id, const_cast<LPWSTR>(L"win32ksgd.sys"), win32k_module_info.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
+            if (VMMDLL_Map_GetModuleFromNameU(dma.get_handle(), process_id, "win32ksgd.sys", win32k_module_info.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
                 win32k_module_name = "win32ksgd.sys";
             }
-            else if (VMMDLL_Map_GetModuleFromNameW(dma.get_handle(), process_id, const_cast<LPWSTR>(L"win32k.sys"), win32k_module_info.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
+            else if (VMMDLL_Map_GetModuleFromNameU(dma.get_handle(), process_id, "win32k.sys", win32k_module_info.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
                 win32k_module_name = "win32k.sys";
             }
             else {
@@ -71,12 +78,12 @@ bool InputState::retrieve_gafAsyncKeyState(const std::vector<uint32_t>& csrss_pr
             uint64_t user_session_state = 0;
             for (int i = 0; i < 4; i++) {
                 user_session_state = dma.read<uint64_t>(dma.read<uint64_t>(dma.read<uint64_t>(g_session_address + 7 + dma.read<int>(g_session_address + 3, process_id), process_id) + 8 * i, process_id), process_id);
-                if (user_session_state > 0x7FFFFFFFFFFF)
+                if (is_kernel_address(user_session_state))
                     break;
             }
 
             VolkResource<VMMDLL_MAP_MODULEENTRY> win32kbase_info{};
-            if (!VMMDLL_Map_GetModuleFromNameW(dma.get_handle(), process_id, const_cast<LPWSTR>(L"win32kbase.sys"), win32kbase_info.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
+            if (!VMMDLL_Map_GetModuleFromNameU(dma.get_handle(), process_id, "win32kbase.sys", win32kbase_info.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
                 logger.error("Failed to find win32kbase.sys for csrss.exe (PID: {}).", process_id);
                 continue;
             }
@@ -89,7 +96,7 @@ bool InputState::retrieve_gafAsyncKeyState(const std::vector<uint32_t>& csrss_pr
 
             gafAsyncKeyState_address = user_session_state + dma.read<uint32_t>(sig_ptr + 3, process_id);
 
-            if (gafAsyncKeyState_address > 0x7FFFFFFFFFFF) {
+            if (is_kernel_address(gafAsyncKeyState_address)) {
                 return true;
             }
         }
@@ -99,20 +106,19 @@ bool InputState::retrieve_gafAsyncKeyState(const std::vector<uint32_t>& csrss_pr
 
     // windows_version_build <= 22000
     VolkResource<VMMDLL_MAP_EAT> eat_map{};
-    if (!VMMDLL_Map_GetEATU(dma.get_handle(), winlogon_process_id | VMMDLL_PID_PROCESS_WITH_KERNELMEMORY, const_cast<LPSTR>("win32kbase.sys"), eat_map.out()) || eat_map->dwVersion != VMMDLL_MAP_EAT_VERSION) {
+    if (!VMMDLL_Map_GetEATU(dma.get_handle(), winlogon_process_id | VMMDLL_PID_PROCESS_WITH_KERNELMEMORY, "win32kbase.sys", eat_map.out()) || eat_map->dwVersion != VMMDLL_MAP_EAT_VERSION) {
         logger.error("Failed to retrieve EAT map in win32kbase.sys for winlogon.exe (PID: {}).", winlogon_process_id);
         return false;
     }
 
-    for (DWORD i = 0; i < eat_map->cMap; ++i) {
-        PVMMDLL_MAP_EATENTRY entry = eat_map->pMap + i;
-        if (strcmp(entry->uszFunction, "gafAsyncKeyState") == 0) {
-            gafAsyncKeyState_address = entry->vaFunction;
-            break;
-        }
+    for (auto& entry : std::span(eat_map->pMap, eat_map->cMap)) {
+        if (!entry.uszFunction) continue;
+        if (std::string_view(entry.uszFunction) != "gafAsyncKeyState") continue;
+        gafAsyncKeyState_address = entry.vaFunction;
+        break;
     }
 
-    return gafAsyncKeyState_address > 0x7FFFFFFFFFFF;
+    return is_kernel_address(gafAsyncKeyState_address);
 }
 
 bool InputState::retrieve_gptCursorAsync(const std::vector<uint32_t>& csrss_process_ids) {
@@ -124,8 +130,8 @@ bool InputState::retrieve_gptCursorAsync(const std::vector<uint32_t>& csrss_proc
     for (const uint32_t process_id : csrss_process_ids) {
         if (gptCursorAsync_address) break;
 
-        VolkResource<VMMDLL_MAP_EAT> eat_map;
-        if (!VMMDLL_Map_GetEATU(dma.get_handle(), process_id | VMMDLL_PID_PROCESS_WITH_KERNELMEMORY, const_cast<LPSTR>("win32kbase.sys"), eat_map.out())) {
+        VolkResource<VMMDLL_MAP_EAT> eat_map{};
+        if (!VMMDLL_Map_GetEATU(dma.get_handle(), process_id, "win32kbase.sys", eat_map.out())) {
             logger.error("Failed to retrieve EAT map in win32kbase.sys for csrss.exe (PID: {}).", process_id);
             continue;
         }
@@ -135,29 +141,29 @@ bool InputState::retrieve_gptCursorAsync(const std::vector<uint32_t>& csrss_proc
             continue;
         }
 
-        for (DWORD i = 0; i < eat_map->cMap; ++i) {
-            auto& entry = eat_map->pMap[i];
+        const Process candidate_process(dma, process_id);
 
+        for (auto& entry : std::span(eat_map->pMap, eat_map->cMap)) {
             if (!entry.uszFunction) continue;
 
             std::string_view export_function_name(entry.uszFunction);
             if (export_function_name.find("gptCursorAsync") == std::string::npos) continue;
 
-            Point position = dma.read<Point>(entry.vaFunction, process_id);
+            Point position = candidate_process.read<Point>(entry.vaFunction);
 
             if (((position.x == 0 && position.y == 0) || (position.x == 512 && position.y == 384))) continue;
 
-            gptCursorAsync_process_id = process_id;
             gptCursorAsync_address = entry.vaFunction;
+            gptCursorAsync_process.emplace(dma, process_id);
             break;
         }
     }
 
-    return (gptCursorAsync_address != 0 && gptCursorAsync_process_id != 0);
+    return gptCursorAsync_address != 0 && gptCursorAsync_process.has_value();
 }
 
 InputState::Point InputState::get_cursor_position() const {
-    return dma.read<Point>(gptCursorAsync_address, gptCursorAsync_process_id);
+    return gptCursorAsync_process->read<Point>(gptCursorAsync_address);
 }
 
 bool InputState::read_bitmap() {

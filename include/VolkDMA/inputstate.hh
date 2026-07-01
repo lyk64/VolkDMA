@@ -2,8 +2,11 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string_view>
 #include <vector>
+
+#include "include/VolkDMA/process.hh"
 
 class DMA;
 
@@ -192,8 +195,8 @@ private:
 
     uint64_t windows_version_build{};
 
-    uint32_t gptCursorAsync_process_id{};
     uint64_t gptCursorAsync_address{};
+    std::optional<Process> gptCursorAsync_process;
 
     uint32_t winlogon_process_id{};
     uint64_t gafAsyncKeyState_address{};

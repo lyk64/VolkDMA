@@ -11,7 +11,8 @@ using VMMDLL_SCATTER_HANDLE = void*;
 
 class Process {
 public:
-    Process(DMA& dma, const std::string& process_name);
+    Process(const DMA& dma, const std::string& process_name);
+    Process(const DMA& dma, uint32_t process_id);
     [[nodiscard]] uint64_t get_base_address(const std::string& module_name) const;
     [[nodiscard]] size_t get_size(const std::string& module_name) const;
     bool dump_module(const std::string& module_name, const std::string& path) const;

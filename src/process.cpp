@@ -26,7 +26,8 @@ VOID cb_add_file(_Inout_ HANDLE h, _In_ LPCSTR uszName, _In_ ULONG64 cb, _In_opt
         cb_size = cb;
 }
 
-Process::Process(DMA& dma, const std::string& process_name) : dma(dma), process_id(dma.get_process_id(process_name)) {}
+Process::Process(const DMA& dma, const std::string& process_name) : dma(dma), process_id(dma.get_process_id(process_name)) {}
+Process::Process(const DMA& dma, uint32_t process_id) : dma(dma), process_id(process_id) {}
 
 uint64_t Process::get_base_address(const std::string& module_name) const {
     VolkResource<VMMDLL_MAP_MODULEENTRY> module_entry{};

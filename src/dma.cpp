@@ -9,7 +9,6 @@
 
 #include "external/vmm/vmmdll.h"
 
-#include "include/VolkDMA/inputstate.hh"
 #include "include/VolkDMA/internal/volkresource.hh"
 
 static constexpr Volk::Log::Logger logger{ "DMA" };
@@ -27,7 +26,6 @@ T DMA::read(uint64_t address, uint32_t process_id) const {
 template uint64_t DMA::read<uint64_t>(uint64_t, uint32_t) const;
 template uint32_t DMA::read<uint32_t>(uint64_t, uint32_t) const;
 template int DMA::read<int>(uint64_t, uint32_t) const;
-template InputState::Point DMA::read<InputState::Point>(uint64_t, uint32_t) const;
 
 DMA::DMA(bool use_memory_map) {
     LPCSTR argv[8] = {"", "-device", "fpga://algo=0", "", "", "", "", ""};
