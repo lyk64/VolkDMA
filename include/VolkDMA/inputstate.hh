@@ -6,7 +6,7 @@
 #include <string_view>
 #include <vector>
 
-#include "include/VolkDMA/process.hh"
+#include "process.hh"
 
 class DMA;
 
