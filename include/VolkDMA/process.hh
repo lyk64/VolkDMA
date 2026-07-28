@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "address.hh"
+
 class DMA;
 class Scatter;
 
@@ -17,7 +19,6 @@ public:
     [[nodiscard]] std::string get_path(const std::string& module_name) const;
     [[nodiscard]] std::vector<std::string> get_modules(uint32_t process_id = 0) const;
     bool fix_cr3(const std::string& process_name);
-    [[nodiscard]] bool is_valid_address(uint64_t address) const noexcept { return address >= 0x1000; }
     bool virtual_to_physical(uint64_t virtual_address, uint64_t& physical_address) const;
     bool read(uint64_t address, void* buffer, size_t size) const;
     [[nodiscard]] uint64_t read_chain(uint64_t base, const std::vector<uint64_t>& offsets) const;
@@ -39,6 +40,7 @@ public:
         uint64_t result = base;
         for (size_t i = 0; i + 1 < offsets.size(); ++i) {
             result = this->read<uint64_t>(result + offsets[i]);
+            if (!is_valid_address(result)) return {};
         }
         return this->read<T>(result + offsets.back());
     }

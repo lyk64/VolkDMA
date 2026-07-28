@@ -36,6 +36,9 @@
     <ClInclude Include="external\vmm\vmmdll.h">
       <Filter>external\vmm</Filter>
     </ClInclude>
+    <ClInclude Include="include\VolkDMA\address.hh">
+      <Filter>include\VolkDMA</Filter>
+    </ClInclude>
     <ClInclude Include="include\VolkDMA\dma.hh">
       <Filter>include\VolkDMA</Filter>
     </ClInclude>

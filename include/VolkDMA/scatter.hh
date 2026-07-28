@@ -16,8 +16,6 @@ public:
     Scatter& operator=(const Scatter&) = delete;
     Scatter(Scatter&& other) noexcept;
 
-    [[nodiscard]] bool is_valid_address(uint64_t address) const noexcept { return address >= 0x1000; }
-
     bool prepare_read(uint64_t address, void* buffer, size_t size);
     bool prepare_write(uint64_t address, const void* buffer, size_t size);
     bool execute();

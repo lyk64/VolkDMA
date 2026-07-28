@@ -6,15 +6,12 @@
 
 #include "external/vmm/vmmdll.h"
 
+#include "include/VolkDMA/address.hh"
 #include "include/VolkDMA/dma.hh"
 #include "include/VolkDMA/internal/volkresource.hh"
 #include "include/VolkDMA/process.hh"
 
 static constexpr Volk::Log::Logger logger{ "INPUTSTATE" };
-
-[[nodiscard]] static constexpr bool is_kernel_address(uint64_t address) noexcept {
-    return (address >> 47) == 0x1FFFFULL;
-}
 
 InputState::InputState(const DMA& dma) : dma(dma) {
     const auto csrss_process_ids = dma.get_process_id_list("csrss.exe");

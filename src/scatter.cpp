@@ -4,6 +4,7 @@
 
 #include "external/vmm/vmmdll.h"
 
+#include "include/VolkDMA/address.hh"
 #include "include/VolkDMA/dma.hh"
 
 static constexpr Volk::Log::Logger logger{ "SCATTER" };
@@ -29,7 +30,7 @@ Scatter::Scatter(Scatter&& other) noexcept : process_id(other.process_id), handl
 }
 
 bool Scatter::prepare_read(uint64_t address, void* buffer, size_t size) {
-    if (!this->is_valid_address(address)) {
+    if (!is_valid_address(address)) {
         return false;
     }
 
@@ -43,7 +44,7 @@ bool Scatter::prepare_read(uint64_t address, void* buffer, size_t size) {
 }
 
 bool Scatter::prepare_write(uint64_t address, const void* buffer, size_t size) {
-    if (!this->is_valid_address(address)) {
+    if (!is_valid_address(address)) {
         return false;
     }
 

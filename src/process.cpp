@@ -239,7 +239,7 @@ bool Process::fix_cr3(const std::string& process_name) {
 }
 
 bool Process::virtual_to_physical(uint64_t virtual_address, uint64_t& physical_address) const {
-    if (!this->is_valid_address(virtual_address)) {
+    if (!is_valid_address(virtual_address)) {
         return false;
     }
 
@@ -247,7 +247,7 @@ bool Process::virtual_to_physical(uint64_t virtual_address, uint64_t& physical_a
 }
 
 bool Process::read(uint64_t address, void* buffer, size_t size) const {
-    if (!this->is_valid_address(address)) {
+    if (!is_valid_address(address)) {
         return false;
     }
 
@@ -265,6 +265,7 @@ uint64_t Process::read_chain(uint64_t base, const std::vector<uint64_t>& offsets
     uint64_t result = base;
     for (size_t i = 0; i + 1 < offsets.size(); ++i) {
         result = this->read<uint64_t>(result + offsets[i]);
+        if (!is_valid_address(result)) return 0;
     }
     return this->read<uint64_t>(result + offsets.back());
 }
@@ -323,7 +324,7 @@ uint64_t Process::find_signature(const char* signature, uint64_t range_start, ui
 }
 
 bool Process::write(uint64_t address, const void* buffer, size_t size, uint32_t process_id) const {
-    if (!this->is_valid_address(address)) {
+    if (!is_valid_address(address)) {
         return false;
     }
 
