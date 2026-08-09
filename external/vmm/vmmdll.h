@@ -177,13 +177,7 @@ SIZE_T VMMDLL_MemSize(_In_ PVOID pvMem);
 EXPORTED_FUNCTION
 VOID VMMDLL_MemFree(_Frees_ptr_opt_ PVOID pvMem);
 
-EXPORTED_FUNCTION
-_Success_(return)
-BOOL VMMDLL_VirtualToPhysical(
-    _In_ VMM_HANDLE H,
-    _In_ ULONG64 virtualAddress,
-    _Out_ PULONG64 physicalAddress
-);
+
 
 //-----------------------------------------------------------------------------
 // CONFIGURATION SETTINGS BELOW:

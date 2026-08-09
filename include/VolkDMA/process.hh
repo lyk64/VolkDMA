@@ -18,8 +18,7 @@ public:
     bool dump_module(const std::string& module_name, const std::string& path) const;
     [[nodiscard]] std::string get_path(const std::string& module_name) const;
     [[nodiscard]] std::vector<std::string> get_modules(uint32_t process_id = 0) const;
-    bool fix_cr3(const std::string& process_name);
-    bool virtual_to_physical(uint64_t virtual_address, uint64_t& physical_address) const;
+    bool fix_cr3();
     bool read(uint64_t address, void* buffer, size_t size) const;
     [[nodiscard]] uint64_t read_chain(uint64_t base, const std::vector<uint64_t>& offsets) const;
     [[nodiscard]] std::string read_string(uint64_t address, size_t max_length = 256) const;
