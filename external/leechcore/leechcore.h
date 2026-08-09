@@ -11,10 +11,10 @@
 // - README: https://github.com/ufrisk/LeechCore
 // - GUIDE:  https://github.com/ufrisk/LeechCore/wiki
 //
-// (c) Ulf Frisk, 2020-2025
+// (c) Ulf Frisk, 2020-2026
 // Author: Ulf Frisk, pcileech@frizk.net
 //
-// Header Version: 2.20.0
+// Header Version: 2.23
 //
 
 #ifndef __LEECHCORE_H__
@@ -284,6 +284,42 @@ BOOL LcRead(
     _In_ QWORD pa,
     _In_ DWORD cb,
     _Out_writes_(cb) PBYTE pb
+);
+
+/*
+* Per-page result returned by LcReadScatterEx(). Numeric values are ABI-stable.
+* NOT_ISSUED means the backend rejected the page locally and did not send a
+* request to the target.
+*/
+typedef DWORD LC_READ_PAGE_RESULT, *PLC_READ_PAGE_RESULT;
+#define LC_READ_PAGE_RESULT_NONE                    0x00
+#define LC_READ_PAGE_RESULT_SUCCESS                 0x01
+#define LC_READ_PAGE_RESULT_SUCCESS_AFTER_RETRY     0x02
+#define LC_READ_PAGE_RESULT_UNSUPPORTED_REQUEST     0x03
+#define LC_READ_PAGE_RESULT_COMPLETER_ABORT         0x04
+#define LC_READ_PAGE_RESULT_NO_COMPLETION           0x05
+#define LC_READ_PAGE_RESULT_PARTIAL_COMPLETION      0x06
+#define LC_READ_PAGE_RESULT_TRANSPORT_ERROR         0x07
+#define LC_READ_PAGE_RESULT_PROTOCOL_ERROR          0x08
+#define LC_READ_PAGE_RESULT_UNSPECIFIED_ERROR       0x09
+#define LC_READ_PAGE_RESULT_NOT_ISSUED              0x0A
+
+/*
+* Read memory in a scattered non-contiguous way and return a typed result for
+* every page. The function-level result reports argument/setup/dispatch status;
+* individual page success remains in MEM_SCATTER.f and pResults.
+* -- hLC
+* -- cMEMs
+* -- ppMEMs
+* -- pResults
+* -- return
+*/
+EXPORTED_FUNCTION _Success_(return)
+BOOL LcReadScatterEx(
+    _In_ HANDLE hLC,
+    _In_ DWORD cMEMs,
+    _Inout_ PPMEM_SCATTER ppMEMs,
+    _Out_writes_(cMEMs) PLC_READ_PAGE_RESULT pResults
 );
 
 /*
