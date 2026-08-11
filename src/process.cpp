@@ -273,12 +273,14 @@ bool Process::fix_cr3() {
 
 bool Process::read(uint64_t address, void* buffer, size_t size) const {
     if (!is_valid_address(address)) {
+        std::memset(buffer, 0, size);
         return false;
     }
 
     DWORD read_size = 0;
     if (!VMMDLL_MemReadEx(this->dma.get_handle(), this->process_id, address, static_cast<PBYTE>(buffer), static_cast<DWORD>(size), &read_size, VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_ZEROPAD_ON_FAIL)) {
         logger.error("Failed to read memory at 0x{:x} (PID: {}).", address, this->process_id);
+        std::memset(buffer, 0, size);
         return false;
     }
 

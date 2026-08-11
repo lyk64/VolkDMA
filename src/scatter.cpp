@@ -2,6 +2,8 @@
 
 #include <VolkLog/log.hh>
 
+#include <cstring>
+
 #include "external/vmm/vmmdll.h"
 
 #include "include/VolkDMA/address.hh"
@@ -31,11 +33,13 @@ Scatter::Scatter(Scatter&& other) noexcept : process_id(other.process_id), handl
 
 bool Scatter::prepare_read(uint64_t address, void* buffer, size_t size) {
     if (!is_valid_address(address)) {
+        std::memset(buffer, 0, size);
         return false;
     }
 
     if (!VMMDLL_Scatter_PrepareEx(handle, address, static_cast<DWORD>(size), static_cast<PBYTE>(buffer), NULL)) {
         logger.error("Failed to prepare read at 0x{:x}.", address);
+        std::memset(buffer, 0, size);
         return false;
     }
     ++pending_count;
