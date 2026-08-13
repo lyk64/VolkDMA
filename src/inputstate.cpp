@@ -35,14 +35,6 @@ InputState::InputState(const DMA& dma) : dma(dma) {
 }
 
 bool InputState::retrieve_gafAsyncKeyState(const std::vector<uint32_t>& csrss_process_ids) {
-    const uint32_t winlogon_process_id = dma.get_process_id("winlogon.exe");
-    if (!winlogon_process_id) {
-        logger.error("Failed to get process ID for winlogon.exe.");
-        return false;
-    }
-
-    gafAsyncKeyState.process.emplace(dma, winlogon_process_id | VMMDLL_PID_PROCESS_WITH_KERNELMEMORY);
-
     if (windows_version_build > 22000) {
         if (csrss_process_ids.empty()) {
             logger.error("No csrss.exe processes found.");
@@ -93,22 +85,32 @@ bool InputState::retrieve_gafAsyncKeyState(const std::vector<uint32_t>& csrss_pr
                 continue;
             }
 
-            gafAsyncKeyState.address = user_session_state + csrss_process.read<uint32_t>(sig_ptr + 3);
+            const uint64_t address = user_session_state + csrss_process.read<uint32_t>(sig_ptr + 3);
+            if (!is_kernel_address(address)) continue;
 
-            if (gafAsyncKeyState.resolved()) {
-                return true;
-            }
+            gafAsyncKeyState.address = address;
+            gafAsyncKeyState.process.emplace(csrss_process);
+            return true;
         }
 
         return false;
     }
 
     // windows_version_build <= 22000
+    const uint32_t winlogon_process_id = dma.get_process_id("winlogon.exe");
+    if (!winlogon_process_id) {
+        logger.error("Failed to get process ID for winlogon.exe.");
+        return false;
+    }
+
     const Process winlogon_process(dma, winlogon_process_id | VMMDLL_PID_PROCESS_WITH_KERNELMEMORY);
 
-    gafAsyncKeyState.address = winlogon_process.get_export("win32kbase.sys", "gafAsyncKeyState");
+    const uint64_t address = winlogon_process.get_export("win32kbase.sys", "gafAsyncKeyState");
+    if (!is_kernel_address(address)) return false;
 
-    return gafAsyncKeyState.resolved();
+    gafAsyncKeyState.address = address;
+    gafAsyncKeyState.process.emplace(winlogon_process);
+    return true;
 }
 
 bool InputState::retrieve_gptCursorAsync(const std::vector<uint32_t>& csrss_process_ids) {
@@ -127,7 +129,7 @@ bool InputState::retrieve_gptCursorAsync(const std::vector<uint32_t>& csrss_proc
         if ((position.x == 0 && position.y == 0) || (position.x == 512 && position.y == 384)) continue;
 
         gptCursorAsync.address = address;
-        gptCursorAsync.process.emplace(dma, process_id);
+        gptCursorAsync.process.emplace(candidate_process);
         return true;
     }
 
