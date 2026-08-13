@@ -38,6 +38,15 @@ uint64_t Process::get_base_address(const std::string& module_name) const {
     return static_cast<uint64_t>(module_entry->vaBase);
 }
 
+uint64_t Process::get_export(const std::string& module_name, const std::string& export_name) const {
+    const uint64_t address = VMMDLL_ProcessGetProcAddressU(this->dma.get_handle(), this->process_id, module_name.c_str(), export_name.c_str());
+    if (!address) {
+        logger.error("Failed to resolve export {} in module {} (PID: {}).", export_name, module_name, this->process_id);
+    }
+
+    return address;
+}
+
 size_t Process::get_size(const std::string& module_name) const {
     VolkResource<VMMDLL_MAP_MODULEENTRY> module_entry{};
 

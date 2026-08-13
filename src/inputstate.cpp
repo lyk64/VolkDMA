@@ -2,8 +2,6 @@
 
 #include <VolkLog/log.hh>
 
-#include <span>
-
 #include "external/vmm/vmmdll.h"
 
 #include "include/VolkDMA/address.hh"
@@ -104,18 +102,9 @@ bool InputState::retrieve_gafAsyncKeyState(const std::vector<uint32_t>& csrss_pr
     }
 
     // windows_version_build <= 22000
-    VolkResource<VMMDLL_MAP_EAT> eat_map{};
-    if (!VMMDLL_Map_GetEATU(dma.get_handle(), winlogon_process_id | VMMDLL_PID_PROCESS_WITH_KERNELMEMORY, "win32kbase.sys", eat_map.out()) || eat_map->dwVersion != VMMDLL_MAP_EAT_VERSION) {
-        logger.error("Failed to retrieve EAT map in win32kbase.sys for winlogon.exe (PID: {}).", winlogon_process_id);
-        return false;
-    }
+    const Process winlogon_process(dma, winlogon_process_id | VMMDLL_PID_PROCESS_WITH_KERNELMEMORY);
 
-    for (auto& entry : std::span(eat_map->pMap, eat_map->cMap)) {
-        if (!entry.uszFunction) continue;
-        if (std::string_view(entry.uszFunction) != "gafAsyncKeyState") continue;
-        gafAsyncKeyState_address = entry.vaFunction;
-        break;
-    }
+    gafAsyncKeyState_address = winlogon_process.get_export("win32kbase.sys", "gafAsyncKeyState");
 
     return is_kernel_address(gafAsyncKeyState_address);
 }
@@ -127,38 +116,20 @@ bool InputState::retrieve_gptCursorAsync(const std::vector<uint32_t>& csrss_proc
     }
 
     for (const uint32_t process_id : csrss_process_ids) {
-        if (gptCursorAsync_address) break;
-
-        VolkResource<VMMDLL_MAP_EAT> eat_map{};
-        if (!VMMDLL_Map_GetEATU(dma.get_handle(), process_id, "win32kbase.sys", eat_map.out())) {
-            logger.error("Failed to retrieve EAT map in win32kbase.sys for csrss.exe (PID: {}).", process_id);
-            continue;
-        }
-
-        if (eat_map->dwVersion != VMMDLL_MAP_EAT_VERSION) {
-            logger.error("EAT version mismatch for csrss.exe (PID: {}): got {}.", process_id, eat_map->dwVersion);
-            continue;
-        }
-
         const Process candidate_process(dma, process_id);
 
-        for (auto& entry : std::span(eat_map->pMap, eat_map->cMap)) {
-            if (!entry.uszFunction) continue;
+        const uint64_t address = candidate_process.get_export("win32kbase.sys", "gptCursorAsync");
+        if (!is_kernel_address(address)) continue;
 
-            std::string_view export_function_name(entry.uszFunction);
-            if (export_function_name.find("gptCursorAsync") == std::string::npos) continue;
+        const Point position = candidate_process.read<Point>(address);
+        if ((position.x == 0 && position.y == 0) || (position.x == 512 && position.y == 384)) continue;
 
-            Point position = candidate_process.read<Point>(entry.vaFunction);
-
-            if (((position.x == 0 && position.y == 0) || (position.x == 512 && position.y == 384))) continue;
-
-            gptCursorAsync_address = entry.vaFunction;
-            gptCursorAsync_process.emplace(dma, process_id);
-            break;
-        }
+        gptCursorAsync_address = address;
+        gptCursorAsync_process.emplace(dma, process_id);
+        return true;
     }
 
-    return gptCursorAsync_address != 0 && gptCursorAsync_process.has_value();
+    return false;
 }
 
 InputState::Point InputState::get_cursor_position() const {
