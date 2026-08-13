@@ -198,8 +198,8 @@ private:
     uint64_t gptCursorAsync_address{};
     std::optional<Process> gptCursorAsync_process;
 
-    uint32_t winlogon_process_id{};
     uint64_t gafAsyncKeyState_address{};
+    std::optional<Process> gafAsyncKeyState_process;
     std::array<uint8_t, 64> state_bitmap{};
     std::array<uint8_t, 64> prev_bitmap{};
 

@@ -35,11 +35,13 @@ InputState::InputState(const DMA& dma) : dma(dma) {
 }
 
 bool InputState::retrieve_gafAsyncKeyState(const std::vector<uint32_t>& csrss_process_ids) {
-    winlogon_process_id = dma.get_process_id("winlogon.exe");
+    const uint32_t winlogon_process_id = dma.get_process_id("winlogon.exe");
     if (!winlogon_process_id) {
         logger.error("Failed to get process ID for winlogon.exe.");
         return false;
     }
+
+    gafAsyncKeyState_process.emplace(dma, winlogon_process_id | VMMDLL_PID_PROCESS_WITH_KERNELMEMORY);
 
     if (windows_version_build > 22000) {
         if (csrss_process_ids.empty()) {
@@ -137,8 +139,10 @@ InputState::Point InputState::get_cursor_position() const {
 }
 
 bool InputState::read_bitmap() {
+    if (!gafAsyncKeyState_process) return false;
+
     prev_bitmap = state_bitmap;
-    return VMMDLL_MemReadEx(dma.get_handle(), winlogon_process_id | VMMDLL_PID_PROCESS_WITH_KERNELMEMORY, gafAsyncKeyState_address, reinterpret_cast<PBYTE>(&state_bitmap), static_cast<DWORD>(sizeof(state_bitmap)), nullptr, VMMDLL_FLAG_NOCACHE);
+    return gafAsyncKeyState_process->read(gafAsyncKeyState_address, state_bitmap.data(), state_bitmap.size());
 }
 
 bool InputState::get_bit(const std::array<uint8_t, 64>& bitmap, uint8_t virtual_key_code) const {
