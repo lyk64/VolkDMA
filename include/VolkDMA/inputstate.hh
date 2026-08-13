@@ -6,6 +6,7 @@
 #include <string_view>
 #include <vector>
 
+#include "address.hh"
 #include "process.hh"
 
 class DMA;
@@ -191,15 +192,20 @@ public:
     }};
 
 private:
+    struct KernelSymbol {
+        uint64_t address{};
+        std::optional<Process> process;
+
+        [[nodiscard]] bool resolved() const { return is_kernel_address(address) && process.has_value(); }
+    };
+
     const DMA& dma;
 
     uint64_t windows_version_build{};
 
-    uint64_t gptCursorAsync_address{};
-    std::optional<Process> gptCursorAsync_process;
+    KernelSymbol gptCursorAsync;
+    KernelSymbol gafAsyncKeyState;
 
-    uint64_t gafAsyncKeyState_address{};
-    std::optional<Process> gafAsyncKeyState_process;
     std::array<uint8_t, 64> state_bitmap{};
     std::array<uint8_t, 64> prev_bitmap{};
 

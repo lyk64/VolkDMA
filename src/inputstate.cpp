@@ -41,7 +41,7 @@ bool InputState::retrieve_gafAsyncKeyState(const std::vector<uint32_t>& csrss_pr
         return false;
     }
 
-    gafAsyncKeyState_process.emplace(dma, winlogon_process_id | VMMDLL_PID_PROCESS_WITH_KERNELMEMORY);
+    gafAsyncKeyState.process.emplace(dma, winlogon_process_id | VMMDLL_PID_PROCESS_WITH_KERNELMEMORY);
 
     if (windows_version_build > 22000) {
         if (csrss_process_ids.empty()) {
@@ -93,9 +93,9 @@ bool InputState::retrieve_gafAsyncKeyState(const std::vector<uint32_t>& csrss_pr
                 continue;
             }
 
-            gafAsyncKeyState_address = user_session_state + csrss_process.read<uint32_t>(sig_ptr + 3);
+            gafAsyncKeyState.address = user_session_state + csrss_process.read<uint32_t>(sig_ptr + 3);
 
-            if (is_kernel_address(gafAsyncKeyState_address)) {
+            if (gafAsyncKeyState.resolved()) {
                 return true;
             }
         }
@@ -106,9 +106,9 @@ bool InputState::retrieve_gafAsyncKeyState(const std::vector<uint32_t>& csrss_pr
     // windows_version_build <= 22000
     const Process winlogon_process(dma, winlogon_process_id | VMMDLL_PID_PROCESS_WITH_KERNELMEMORY);
 
-    gafAsyncKeyState_address = winlogon_process.get_export("win32kbase.sys", "gafAsyncKeyState");
+    gafAsyncKeyState.address = winlogon_process.get_export("win32kbase.sys", "gafAsyncKeyState");
 
-    return is_kernel_address(gafAsyncKeyState_address);
+    return gafAsyncKeyState.resolved();
 }
 
 bool InputState::retrieve_gptCursorAsync(const std::vector<uint32_t>& csrss_process_ids) {
@@ -126,8 +126,8 @@ bool InputState::retrieve_gptCursorAsync(const std::vector<uint32_t>& csrss_proc
         const Point position = candidate_process.read<Point>(address);
         if ((position.x == 0 && position.y == 0) || (position.x == 512 && position.y == 384)) continue;
 
-        gptCursorAsync_address = address;
-        gptCursorAsync_process.emplace(dma, process_id);
+        gptCursorAsync.address = address;
+        gptCursorAsync.process.emplace(dma, process_id);
         return true;
     }
 
@@ -135,15 +135,15 @@ bool InputState::retrieve_gptCursorAsync(const std::vector<uint32_t>& csrss_proc
 }
 
 InputState::Point InputState::get_cursor_position() const {
-    if (!gptCursorAsync_process) return {};
-    return gptCursorAsync_process->read<Point>(gptCursorAsync_address);
+    if (!gptCursorAsync.resolved()) return {};
+    return gptCursorAsync.process->read<Point>(gptCursorAsync.address);
 }
 
 bool InputState::read_bitmap() {
-    if (!gafAsyncKeyState_process) return false;
+    if (!gafAsyncKeyState.resolved()) return false;
 
     prev_bitmap = state_bitmap;
-    return gafAsyncKeyState_process->read(gafAsyncKeyState_address, state_bitmap.data(), state_bitmap.size());
+    return gafAsyncKeyState.process->read(gafAsyncKeyState.address, state_bitmap.data(), state_bitmap.size());
 }
 
 bool InputState::get_bit(const std::array<uint8_t, 64>& bitmap, uint8_t virtual_key_code) const {
