@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <charconv>
 #include <chrono>
-#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <memory>
@@ -318,6 +317,38 @@ uint64_t Process::find_signature(const char* signature, uint64_t range_start, ui
         return 0;
     }
 
+    struct PatternByte {
+        uint8_t value;
+        uint8_t mask;
+    };
+
+    std::vector<PatternByte> pattern;
+
+    for (const char* pat = signature; *pat;) {
+        if (*pat == ' ') {
+            ++pat;
+        }
+        else if (*pat == '?') {
+            pattern.emplace_back(0x00, 0x00);
+            pat += (pat[1] == '?') ? 2 : 1;
+        }
+        else {
+            uint8_t value = 0;
+            const auto [end, ec] = std::from_chars(pat, pat + (pat[1] ? 2 : 1), value, 16);
+            if (ec != std::errc{}) {
+                logger.error("Malformed signature: {}.", signature);
+                return 0;
+            }
+
+            pattern.emplace_back(value, 0xFF);
+            pat = end;
+        }
+    }
+
+    if (pattern.empty()) {
+        return 0;
+    }
+
     const uint64_t size = range_end - range_start;
     std::vector<uint8_t> buffer(size);
 
@@ -325,38 +356,15 @@ uint64_t Process::find_signature(const char* signature, uint64_t range_start, ui
         return 0;
     }
 
-    const char* pat = signature;
-    uint64_t first_match = 0;
+    const auto match = std::ranges::search(buffer, pattern, [](uint8_t byte, PatternByte expected) {
+        return (byte & expected.mask) == expected.value;
+    });
 
-    auto get_byte = [](const char* hex) -> uint8_t {
-        char byte[3] = { hex[0], hex[1], 0 };
-        return static_cast<uint8_t>(std::strtoul(byte, nullptr, 16));
-    };
-
-    for (uint64_t i = 0; i < size; i++) {
-        if (*pat == '\0') {
-            break;
-        }
-
-        if (*pat == '?' || buffer[i] == get_byte(pat)) {
-            if (!first_match) {
-                first_match = range_start + i;
-            }
-
-            pat += (*pat == '?') ? 1 : 2;
-            if (*pat == ' ') ++pat;
-
-            if (*pat == '\0') {
-                return first_match;
-            }
-        }
-        else {
-            pat = signature;
-            first_match = 0;
-        }
+    if (match.empty()) {
+        return 0;
     }
 
-    return 0;
+    return range_start + static_cast<uint64_t>(match.begin() - buffer.begin());
 }
 
 bool Process::write(uint64_t address, const void* buffer, size_t size, uint32_t process_id) const {
