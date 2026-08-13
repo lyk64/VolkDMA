@@ -146,9 +146,9 @@ bool InputState::read_bitmap() {
     return gafAsyncKeyState.process->read(gafAsyncKeyState.address, state_bitmap.data(), state_bitmap.size());
 }
 
-bool InputState::get_bit(const std::array<uint8_t, 64>& bitmap, uint8_t virtual_key_code) const {
-    const int bit_index = virtual_key_code * 2;
-    return (bitmap[bit_index / 8] & (1 << (bit_index % 8))) != 0;
+bool InputState::get_bit(const Bitmap& bitmap, uint8_t virtual_key_code) {
+    const size_t bit_index = static_cast<size_t>(virtual_key_code) * 2;
+    return (bitmap[bit_index / 8] & (1u << (bit_index % 8))) != 0;
 }
 
 bool InputState::is_key_held(uint8_t virtual_key_code) const {

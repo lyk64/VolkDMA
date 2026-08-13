@@ -32,7 +32,7 @@ public:
         std::string_view name;
     };
 
-    inline static constexpr std::array<VirtualKey, 156> virtual_keys = {{
+    inline static constexpr auto virtual_keys = std::to_array<VirtualKey>({
         {0x01, "Left Mouse Button"},
         {0x02, "Right Mouse Button"},
         {0x03, "Control-break Processing"},
@@ -189,9 +189,12 @@ public:
         {0xDD, "Right Bracket"},
         {0xDE, "Single Quote"},
         {0xFF, "System Quirk (often Pause or Print Screen)"},
-    }};
+    });
 
 private:
+    static constexpr size_t bitmap_size = 256 * 2 / 8;
+    using Bitmap = std::array<uint8_t, bitmap_size>;
+
     struct KernelSymbol {
         uint64_t address{};
         std::optional<Process> process;
@@ -206,10 +209,10 @@ private:
     KernelSymbol gptCursorAsync;
     KernelSymbol gafAsyncKeyState;
 
-    std::array<uint8_t, 64> state_bitmap{};
-    std::array<uint8_t, 64> prev_bitmap{};
+    Bitmap state_bitmap{};
+    Bitmap prev_bitmap{};
 
-    [[nodiscard]] bool get_bit(const std::array<uint8_t, 64>& bitmap, uint8_t virtual_key_code) const;
+    [[nodiscard]] static bool get_bit(const Bitmap& bitmap, uint8_t virtual_key_code);
     [[nodiscard]] bool retrieve_gafAsyncKeyState(const std::vector<uint32_t>& csrss_process_ids);
     [[nodiscard]] bool retrieve_gptCursorAsync(const std::vector<uint32_t>& csrss_process_ids);
 };
