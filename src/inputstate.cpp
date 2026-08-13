@@ -135,6 +135,7 @@ bool InputState::retrieve_gptCursorAsync(const std::vector<uint32_t>& csrss_proc
 }
 
 InputState::Point InputState::get_cursor_position() const {
+    if (!gptCursorAsync_process) return {};
     return gptCursorAsync_process->read<Point>(gptCursorAsync_address);
 }
 
