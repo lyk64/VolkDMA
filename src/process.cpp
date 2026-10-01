@@ -18,16 +18,18 @@
 #include "external/vmm/vmmdll.h"
 
 #include "include/VolkDMA/dma.hh"
-#include "include/VolkDMA/internal/volkresource.hh"
+#include "detail/resource.hh"
 #include "include/VolkDMA/scatter.hh"
+
+namespace volk::dma {
 
 static constexpr Volk::Log::Logger logger{ "PROCESS" };
 
-Process::Process(const DMA& dma, const std::string& process_name) : dma(dma), process_id(dma.get_process_id(process_name)) {}
-Process::Process(const DMA& dma, uint32_t process_id) : dma(dma), process_id(process_id) {}
+Process::Process(const Device& dma, const std::string& process_name) : dma(dma), process_id(dma.get_process_id(process_name)) {}
+Process::Process(const Device& dma, uint32_t process_id) : dma(dma), process_id(process_id) {}
 
 uint64_t Process::get_base_address(const std::string& module_name) const {
-    VolkResource<VMMDLL_MAP_MODULEENTRY> module_entry{};
+    detail::Resource<VMMDLL_MAP_MODULEENTRY> module_entry{};
 
     if (!VMMDLL_Map_GetModuleFromNameU(this->dma.get_handle(), this->process_id, module_name.c_str(), module_entry.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
         logger.error("Failed to find base address of module: {}.", module_name);
@@ -47,7 +49,7 @@ uint64_t Process::get_export(const std::string& module_name, const std::string& 
 }
 
 size_t Process::get_size(const std::string& module_name) const {
-    VolkResource<VMMDLL_MAP_MODULEENTRY> module_entry{};
+    detail::Resource<VMMDLL_MAP_MODULEENTRY> module_entry{};
 
     if (!VMMDLL_Map_GetModuleFromNameU(this->dma.get_handle(), this->process_id, module_name.c_str(), module_entry.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
         logger.error("Failed to find size of module: {}.", module_name);
@@ -117,7 +119,7 @@ bool Process::dump_module(const std::string& module_name, const std::string& pat
 }
 
 std::string Process::get_path(const std::string& module_name) const {
-    VolkResource<VMMDLL_MAP_MODULEENTRY> mod;
+    detail::Resource<VMMDLL_MAP_MODULEENTRY> mod;
 
     if (!VMMDLL_Map_GetModuleFromNameU(this->dma.get_handle(), this->process_id, module_name.c_str(), mod.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
         logger.error("Failed to find path for module: {}.", module_name);
@@ -131,7 +133,7 @@ std::vector<std::string> Process::get_modules(uint32_t process_id) const {
     DWORD target_process_id = (process_id != 0) ? process_id : this->process_id;
 
     std::vector<std::string> modules;
-    VolkResource<VMMDLL_MAP_MODULE> module_map;
+    detail::Resource<VMMDLL_MAP_MODULE> module_map;
 
     if (!VMMDLL_Map_GetModuleU(this->dma.get_handle(), target_process_id, module_map.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
         logger.error("Failed to get module list.");
@@ -151,7 +153,7 @@ std::vector<std::string> Process::get_modules(uint32_t process_id) const {
 
 bool Process::fix_cr3() {
     const auto check_translation = [this](std::string_view stage) {
-        VolkResource<VMMDLL_MAP_MODULE> module_map;
+        detail::Resource<VMMDLL_MAP_MODULE> module_map;
         if (!VMMDLL_Map_GetModuleU(this->dma.get_handle(), this->process_id, module_map.out(), VMMDLL_MODULE_FLAG_NORMAL) || module_map->cMap == 0) {
             return false;
         }
@@ -205,7 +207,7 @@ bool Process::fix_cr3() {
 
     logger.debug("PFN scan completed in {}ms.", std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - scan_start).count());
 
-    const VolkResource<VMMDLL_VFS_FILELISTBLOB> listing{ VMMDLL_VfsListBlobU(this->dma.get_handle(), "\\misc\\procinfo\\") };
+    const detail::Resource<VMMDLL_VFS_FILELISTBLOB> listing{ VMMDLL_VfsListBlobU(this->dma.get_handle(), "\\misc\\procinfo\\") };
     if (!listing) {
         logger.error("Failed to list \\misc\\procinfo\\.");
         return false;
@@ -385,3 +387,5 @@ bool Process::write(uint64_t address, const void* buffer, size_t size, uint32_t 
 Scatter Process::create_scatter(uint32_t process_id) const {
     return Scatter(this->dma, (process_id != 0) ? process_id : this->process_id);
 }
+
+} // namespace volk::dma

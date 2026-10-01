@@ -9,11 +9,13 @@
 #include "address.hh"
 #include "process.hh"
 
-class DMA;
+namespace volk::dma {
+
+class Device;
 
 class InputState {
 public:
-    explicit InputState(const DMA& dma);
+    explicit InputState(const Device& dma);
 
     struct Point {
         int32_t x;
@@ -202,7 +204,7 @@ private:
         [[nodiscard]] bool resolved() const { return is_kernel_address(address) && process.has_value(); }
     };
 
-    const DMA& dma;
+    const Device& dma;
 
     uint64_t windows_version_build{};
 
@@ -216,3 +218,5 @@ private:
     [[nodiscard]] bool retrieve_gafAsyncKeyState(const std::vector<uint32_t>& csrss_process_ids);
     [[nodiscard]] bool retrieve_gptCursorAsync(const std::vector<uint32_t>& csrss_process_ids);
 };
+
+} // namespace volk::dma

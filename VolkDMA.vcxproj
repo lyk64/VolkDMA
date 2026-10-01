@@ -17,7 +17,7 @@
     <ClInclude Include="include\VolkDMA\address.hh" />
     <ClInclude Include="include\VolkDMA\dma.hh" />
     <ClInclude Include="include\VolkDMA\inputstate.hh" />
-    <ClInclude Include="include\VolkDMA\internal\volkresource.hh" />
+    <ClInclude Include="src\detail\resource.hh" />
     <ClInclude Include="include\VolkDMA\process.hh" />
     <ClInclude Include="include\VolkDMA\scatter.hh" />
   </ItemGroup>

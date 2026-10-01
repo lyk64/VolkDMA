@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+namespace volk::dma {
+
 inline constexpr uint64_t lowest_user_address = 0x10000;
 
 [[nodiscard]] inline constexpr bool is_user_address(uint64_t address) noexcept {
@@ -15,3 +17,5 @@ inline constexpr uint64_t lowest_user_address = 0x10000;
 [[nodiscard]] inline constexpr bool is_valid_address(uint64_t address) noexcept {
     return is_user_address(address) || is_kernel_address(address);
 }
+
+} // namespace volk::dma

@@ -6,13 +6,15 @@
 
 #include "address.hh"
 
-class DMA;
+namespace volk::dma {
+
+class Device;
 class Scatter;
 
 class Process {
 public:
-    Process(const DMA& dma, const std::string& process_name);
-    Process(const DMA& dma, uint32_t process_id);
+    Process(const Device& dma, const std::string& process_name);
+    Process(const Device& dma, uint32_t process_id);
     [[nodiscard]] uint64_t get_base_address(const std::string& module_name) const;
     [[nodiscard]] uint64_t get_export(const std::string& module_name, const std::string& export_name) const;
     [[nodiscard]] size_t get_size(const std::string& module_name) const;
@@ -51,6 +53,8 @@ public:
     }
 
 private:
-    const DMA& dma;
+    const Device& dma;
     const uint32_t process_id;
 };
+
+} // namespace volk::dma

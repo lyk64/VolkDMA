@@ -6,12 +6,14 @@
 
 #include "include/VolkDMA/address.hh"
 #include "include/VolkDMA/dma.hh"
-#include "include/VolkDMA/internal/volkresource.hh"
+#include "detail/resource.hh"
 #include "include/VolkDMA/process.hh"
+
+namespace volk::dma {
 
 static constexpr Volk::Log::Logger logger{ "INPUTSTATE" };
 
-InputState::InputState(const DMA& dma) : dma(dma) {
+InputState::InputState(const Device& dma) : dma(dma) {
     const auto csrss_process_ids = dma.get_process_id_list("csrss.exe");
 
     if (retrieve_gptCursorAsync(csrss_process_ids)) {
@@ -42,7 +44,7 @@ bool InputState::retrieve_gafAsyncKeyState(const std::vector<uint32_t>& csrss_pr
         }
 
         for (const uint32_t process_id : csrss_process_ids) {
-            VolkResource<VMMDLL_MAP_MODULEENTRY> win32k_module_info{};
+            detail::Resource<VMMDLL_MAP_MODULEENTRY> win32k_module_info{};
             std::string_view win32k_module_name;
             if (VMMDLL_Map_GetModuleFromNameU(dma.get_handle(), process_id, "win32ksgd.sys", win32k_module_info.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
                 win32k_module_name = "win32ksgd.sys";
@@ -73,7 +75,7 @@ bool InputState::retrieve_gafAsyncKeyState(const std::vector<uint32_t>& csrss_pr
                     break;
             }
 
-            VolkResource<VMMDLL_MAP_MODULEENTRY> win32kbase_info{};
+            detail::Resource<VMMDLL_MAP_MODULEENTRY> win32kbase_info{};
             if (!VMMDLL_Map_GetModuleFromNameU(dma.get_handle(), process_id, "win32kbase.sys", win32kbase_info.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
                 logger.error("Failed to find win32kbase.sys for csrss.exe (PID: {}).", process_id);
                 continue;
@@ -168,3 +170,5 @@ void InputState::print_down_keys() const {
         }
     }
 }
+
+} // namespace volk::dma

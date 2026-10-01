@@ -22,7 +22,7 @@
     <Filter Include="include\VolkDMA">
       <UniqueIdentifier>{cecd8df2-418d-4b62-b3ba-f7ca7fd671ae}</UniqueIdentifier>
     </Filter>
-    <Filter Include="include\VolkDMA\internal">
+    <Filter Include="src\detail">
       <UniqueIdentifier>{93caef52-fd09-4479-9c41-3e7f430dc11d}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
@@ -51,8 +51,8 @@
     <ClInclude Include="include\VolkDMA\scatter.hh">
       <Filter>include\VolkDMA</Filter>
     </ClInclude>
-    <ClInclude Include="include\VolkDMA\internal\volkresource.hh">
-      <Filter>include\VolkDMA\internal</Filter>
+    <ClInclude Include="src\detail\resource.hh">
+      <Filter>src\detail</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

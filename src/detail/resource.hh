@@ -2,18 +2,20 @@
 
 extern "C" void VMMDLL_MemFree(void*);
 
+namespace volk::dma::detail {
+
 template <class T>
-class VolkResource {
+class Resource {
 public:
-    VolkResource() = default;
-    explicit VolkResource(T* p) : p_(p) {}
-    ~VolkResource() { reset(); }
+    Resource() = default;
+    explicit Resource(T* p) : p_(p) {}
+    ~Resource() { reset(); }
 
-    VolkResource(const VolkResource&) = delete;
-    VolkResource& operator=(const VolkResource&) = delete;
+    Resource(const Resource&) = delete;
+    Resource& operator=(const Resource&) = delete;
 
-    VolkResource(VolkResource&& o) noexcept : p_(o.p_) { o.p_ = nullptr; }
-    VolkResource& operator=(VolkResource&& o) noexcept {
+    Resource(Resource&& o) noexcept : p_(o.p_) { o.p_ = nullptr; }
+    Resource& operator=(Resource&& o) noexcept {
         if (this != &o) { reset(); p_ = o.p_; o.p_ = nullptr; }
         return *this;
     }
@@ -32,3 +34,5 @@ public:
 private:
     T* p_ = nullptr;
 };
+
+} // namespace volk::dma::detail

@@ -4,12 +4,15 @@
 #include <type_traits>
 #include <vector>
 
-class DMA;
 using VMMDLL_SCATTER_HANDLE = void*;
+
+namespace volk::dma {
+
+class Device;
 
 class Scatter {
 public:
-    Scatter(const DMA& dma, uint32_t process_id);
+    Scatter(const Device& dma, uint32_t process_id);
     ~Scatter();
 
     Scatter(const Scatter&) = delete;
@@ -43,3 +46,5 @@ private:
     VMMDLL_SCATTER_HANDLE handle{};
     int pending_count{};
 };
+
+} // namespace volk::dma

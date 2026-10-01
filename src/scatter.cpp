@@ -9,11 +9,13 @@
 #include "include/VolkDMA/address.hh"
 #include "include/VolkDMA/dma.hh"
 
+namespace volk::dma {
+
 static constexpr Volk::Log::Logger logger{ "SCATTER" };
 
 static constexpr DWORD scatter_flags = VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_ZEROPAD_ON_FAIL | VMMDLL_FLAG_SCATTER_PREPAREEX_NOMEMZERO;
 
-Scatter::Scatter(const DMA& dma, uint32_t process_id) : process_id(process_id) {
+Scatter::Scatter(const Device& dma, uint32_t process_id) : process_id(process_id) {
     handle = VMMDLL_Scatter_Initialize(dma.get_handle(), process_id, scatter_flags);
     if (!handle) {
         logger.error("Failed to create handle.");
@@ -82,3 +84,5 @@ bool Scatter::execute() {
 
     return success;
 }
+
+} // namespace volk::dma

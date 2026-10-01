@@ -8,11 +8,13 @@
 
 #include "external/vmm/vmmdll.h"
 
-#include "include/VolkDMA/internal/volkresource.hh"
+#include "detail/resource.hh"
+
+namespace volk::dma {
 
 static constexpr Volk::Log::Logger logger{ "DMA" };
 
-DMA::DMA(bool use_memory_map) {
+Device::Device(bool use_memory_map) {
     LPCSTR argv[8] = {"", "-device", "fpga://algo=0", "", "", "", "", ""};
     DWORD argc = 3;
 
@@ -38,7 +40,7 @@ DMA::DMA(bool use_memory_map) {
     this->clean_fpga();
 }
 
-uint32_t DMA::get_process_id(const std::string& process_name) const {
+uint32_t Device::get_process_id(const std::string& process_name) const {
     DWORD process_id = 0;
 
     if (!VMMDLL_PidGetFromName(this->handle.get(), process_name.c_str(), &process_id) || process_id == 0) {
@@ -48,10 +50,10 @@ uint32_t DMA::get_process_id(const std::string& process_name) const {
     return process_id;
 }
 
-std::vector<uint32_t> DMA::get_process_id_list(const std::string& process_name) const {
+std::vector<uint32_t> Device::get_process_id_list(const std::string& process_name) const {
     std::vector<uint32_t> list = { };
 
-    VolkResource<VMMDLL_PROCESS_INFORMATION> process_info{};
+    detail::Resource<VMMDLL_PROCESS_INFORMATION> process_info{};
     DWORD total_processes = 0;
 
     if (!VMMDLL_ProcessGetInformationAll(this->handle.get(), process_info.out(), &total_processes) || total_processes == 0) {
@@ -69,17 +71,17 @@ std::vector<uint32_t> DMA::get_process_id_list(const std::string& process_name) 
     return list;
 }
 
-bool DMA::dump_memory_map() {
+bool Device::dump_memory_map() {
     LPCSTR argv[] = { "-device", "fpga", "-waitinitialize", "-norefresh" };
     const DWORD argc = static_cast<DWORD>(std::size(argv));
 
-    VolkHandle temp_handle(VMMDLL_Initialize(argc, argv), vmm_close);
+    detail::VmmHandle temp_handle(VMMDLL_Initialize(argc, argv), detail::vmm_close);
     if (!temp_handle) {
         logger.error("Failed to open handle.");
         return false;
     }
 
-    VolkResource<VMMDLL_MAP_PHYSMEM> p_phys_mem_map{};
+    detail::Resource<VMMDLL_MAP_PHYSMEM> p_phys_mem_map{};
     if (!VMMDLL_Map_GetPhysMem(temp_handle.get(), p_phys_mem_map.out())) {
         logger.error("Failed to get physical memory map.");
         return false;
@@ -109,7 +111,7 @@ bool DMA::dump_memory_map() {
     return true;
 }
 
-bool DMA::clean_fpga() {
+bool Device::clean_fpga() {
     ULONG64 fpga_id = 0, version_major = 0, version_minor = 0;
 
     if (!(VMMDLL_ConfigGet(this->handle.get(), LC_OPT_FPGA_FPGA_ID, &fpga_id) && VMMDLL_ConfigGet(this->handle.get(), LC_OPT_FPGA_VERSION_MAJOR, &version_major) && VMMDLL_ConfigGet(this->handle.get(), LC_OPT_FPGA_VERSION_MINOR, &version_minor))) {
@@ -133,3 +135,5 @@ bool DMA::clean_fpga() {
 
     return true;
 }
+
+} // namespace volk::dma
