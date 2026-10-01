@@ -13,8 +13,10 @@ extern "C" void VMMDLL_Close(VMM_HANDLE);
 namespace volk::dma {
 
 namespace detail {
-    inline constexpr auto vmm_close = [](VMM_HANDLE h) noexcept { if (h) VMMDLL_Close(h); };
-    using VmmHandle = std::unique_ptr<std::remove_pointer_t<VMM_HANDLE>, decltype(vmm_close)>;
+
+inline constexpr auto vmm_close = [](VMM_HANDLE h) noexcept { if (h) VMMDLL_Close(h); };
+using VmmHandle = std::unique_ptr<std::remove_pointer_t<VMM_HANDLE>, decltype(vmm_close)>;
+
 } // namespace detail
 
 class Device {
