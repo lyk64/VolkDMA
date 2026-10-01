@@ -11,7 +11,7 @@
 
 namespace volk::dma {
 
-static constexpr Volk::Log::Logger logger{ "SCATTER" };
+static constexpr volk::log::Logger logger{ "SCATTER" };
 
 static constexpr DWORD scatter_flags = VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_ZEROPAD_ON_FAIL | VMMDLL_FLAG_SCATTER_PREPAREEX_NOMEMZERO;
 

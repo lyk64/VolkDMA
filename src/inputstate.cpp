@@ -11,7 +11,7 @@
 
 namespace volk::dma {
 
-static constexpr Volk::Log::Logger logger{ "INPUTSTATE" };
+static constexpr volk::log::Logger logger{ "INPUTSTATE" };
 
 InputState::InputState(const Device& dma) : dma(dma) {
     const auto csrss_process_ids = dma.get_process_id_list("csrss.exe");

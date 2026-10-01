@@ -23,7 +23,7 @@
 
 namespace volk::dma {
 
-static constexpr Volk::Log::Logger logger{ "PROCESS" };
+static constexpr volk::log::Logger logger{ "PROCESS" };
 
 Process::Process(const Device& dma, const std::string& process_name) : dma(dma), process_id(dma.get_process_id(process_name)) {}
 Process::Process(const Device& dma, uint32_t process_id) : dma(dma), process_id(process_id) {}

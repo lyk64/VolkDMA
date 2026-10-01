@@ -12,7 +12,7 @@
 
 namespace volk::dma {
 
-static constexpr Volk::Log::Logger logger{ "DMA" };
+static constexpr volk::log::Logger logger{ "DMA" };
 
 Device::Device(bool use_memory_map) {
     LPCSTR argv[8] = {"", "-device", "fpga://algo=0", "", "", "", "", ""};
