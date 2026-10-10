@@ -3,11 +3,17 @@
 #include <VolkLog/log.hh>
 
 #include <algorithm>
+#include <array>
 #include <charconv>
 #include <chrono>
 #include <cstring>
 #include <filesystem>
+#include <format>
+#include <limits>
 #include <memory>
+#include <optional>
+#include <ranges>
+#include <span>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -150,134 +156,187 @@ std::vector<std::string> Process::get_modules(uint32_t process_id) const {
     return modules;
 }
 
+namespace {
 
-bool Process::fix_cr3() {
-    const auto check_translation = [this](std::string_view stage) {
-        detail::Resource<VMMDLL_MAP_MODULE> module_map;
-        if (!VMMDLL_Map_GetModuleU(this->dma.get_handle(), this->process_id, module_map.out(), VMMDLL_MODULE_FLAG_NORMAL) || module_map->cMap == 0) {
-            return false;
-        }
-
-        const uint64_t base = module_map->pMap[0].vaBase;
-        IMAGE_DOS_HEADER dos{};
-        if (this->read(base, &dos, sizeof(dos)) && dos.e_magic == IMAGE_DOS_SIGNATURE) {
-            logger.info("{}: PID {} resolves {} module(s); verified 'MZ' at 0x{:x}.", stage, this->process_id, module_map->cMap, base);
-        } else {
-            logger.error("{}: PID {} resolves {} module(s) but 0x{:x} did not read back as 'MZ'.", stage, this->process_id, module_map->cMap, base);
-        }
-        return true;
-    };
-
-    if (check_translation("CR3 fix not needed")) {
-        return true;
+std::optional<int> read_procinfo_progress(VMM_HANDLE handle) {
+    std::array<char, 3> raw{};
+    DWORD cb_read = 0;
+    if (VMMDLL_VfsReadU(handle, "\\misc\\procinfo\\progress_percent.txt", reinterpret_cast<PBYTE>(raw.data()), static_cast<DWORD>(raw.size()), &cb_read, 0) != VMMDLL_STATUS_SUCCESS) {
+        return std::nullopt;
     }
 
-    logger.info("CR3 fix needed: PID {} resolves no modules; searching for candidate DTBs.", this->process_id);
+    int percent = 0;
+    if (std::from_chars(raw.data(), raw.data() + cb_read, percent).ec != std::errc{}) {
+        return std::nullopt;
+    }
 
-    if (!VMMDLL_InitializePlugins(this->dma.get_handle())) {
+    return percent;
+}
+
+bool wait_for_procinfo_scan(VMM_HANDLE handle) {
+    using namespace std::chrono_literals;
+
+    if (!VMMDLL_InitializePlugins(handle)) {
         logger.error("Failed to initialize plugins.");
         return false;
     }
 
-    constexpr std::chrono::seconds scan_timeout{ 60 };
+    constexpr auto scan_timeout = 60s;
     const auto scan_start = std::chrono::steady_clock::now();
+    const auto deadline = scan_start + scan_timeout;
 
     int last_percent = -1;
-    for (;;) {
-        BYTE raw[4] = {};
-        DWORD cb_progress = 0;
-        if (VMMDLL_VfsReadU(this->dma.get_handle(), "\\misc\\procinfo\\progress_percent.txt", raw, 3, &cb_progress, 0) == VMMDLL_STATUS_SUCCESS) {
-            const auto* first = reinterpret_cast<const char*>(raw);
-            int percent = 0;
-            if (std::from_chars(first, first + cb_progress, percent).ec == std::errc{}) {
-                last_percent = percent;
-                if (percent == 100) {
-                    break;
-                }
-            }
+    while (std::chrono::steady_clock::now() < deadline) {
+        last_percent = read_procinfo_progress(handle).value_or(last_percent);
+        if (last_percent == 100) {
+            logger.debug("PFN scan completed in {}.", std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - scan_start));
+            return true;
         }
 
-        if (std::chrono::steady_clock::now() - scan_start >= scan_timeout) {
-            logger.error("Timed out after {}s waiting for the procinfo PFN scan (last progress {}%).", scan_timeout.count(), last_percent);
-            return false;
-        }
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(100ms);
     }
 
-    logger.debug("PFN scan completed in {}ms.", std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - scan_start).count());
+    logger.error("Timed out after {} waiting for the procinfo PFN scan (last progress {}%).", scan_timeout, last_percent);
+    return false;
+}
 
-    const detail::Resource<VMMDLL_VFS_FILELISTBLOB> listing{ VMMDLL_VfsListBlobU(this->dma.get_handle(), "\\misc\\procinfo\\") };
-    if (!listing) {
-        logger.error("Failed to list \\misc\\procinfo\\.");
-        return false;
+std::optional<std::string> read_vfs_file(VMM_HANDLE handle, const std::string& directory, std::string_view file_name) {
+    const detail::Resource<VMMDLL_VFS_FILELISTBLOB> listing{ VMMDLL_VfsListBlobU(handle, directory.c_str()) };
+    if (!listing || listing->dwVersion != VMMDLL_VFS_FILELISTBLOB_VERSION) {
+        logger.error("Failed to list {}.", directory);
+        return std::nullopt;
     }
 
-    uint64_t dtb_txt_size = 0;
-    for (DWORD i = 0; i < listing->cFileEntry; ++i) {
-        const auto& entry = listing->FileEntry[i];
-        if (strcmp(listing->uszMultiText + entry.ouszName, "dtb.txt") == 0) {
-            dtb_txt_size = entry.cbFileSize;
-            break;
-        }
+    const std::span<const VMMDLL_VFS_FILELISTBLOB_ENTRY> entries{ listing->FileEntry, listing->cFileEntry };
+    const auto entry = std::ranges::find(entries, file_name, [&listing](const VMMDLL_VFS_FILELISTBLOB_ENTRY& candidate) {
+        return std::string_view(listing->uszMultiText + candidate.ouszName);
+    });
+    if (entry == entries.end() || entry->cbFileSize == 0 || entry->cbFileSize > (std::numeric_limits<DWORD>::max)()) {
+        logger.error("{}{} was not listed, is empty, or is not a readable file.", directory, file_name);
+        return std::nullopt;
     }
 
-    if (dtb_txt_size == 0) {
-        logger.error("\\misc\\procinfo\\dtb.txt was not listed, or is empty.");
-        return false;
-    }
-
-    const auto buffer_size = static_cast<size_t>(dtb_txt_size);
-    const auto buffer = std::make_unique<BYTE[]>(buffer_size);
-
+    const std::string path = std::format("{}{}", directory, file_name);
+    std::string content(static_cast<size_t>(entry->cbFileSize), '\0');
     DWORD cb_read = 0;
-    if (const NTSTATUS status = VMMDLL_VfsReadU(this->dma.get_handle(), "\\misc\\procinfo\\dtb.txt", buffer.get(), static_cast<DWORD>(buffer_size), &cb_read, 0);
+    if (const NTSTATUS status = VMMDLL_VfsReadU(handle, path.c_str(), reinterpret_cast<PBYTE>(content.data()), static_cast<DWORD>(content.size()), &cb_read, 0);
         status != VMMDLL_STATUS_SUCCESS) {
-        logger.error("Failed to read dtb.txt (status 0x{:x}).", static_cast<uint32_t>(status));
-        return false;
+        logger.error("Failed to read {} (status 0x{:x}).", path, static_cast<uint32_t>(status));
+        return std::nullopt;
     }
 
-    logger.debug("Read 0x{:x} of 0x{:x} bytes from dtb.txt.", cb_read, buffer_size);
+    logger.debug("Read 0x{:x} of 0x{:x} bytes from {}.", cb_read, content.size(), path);
+    content.resize(cb_read);
+    return content;
+}
 
-    std::vector<uint64_t> possible_dtbs;
-    std::istringstream lines{ std::string(reinterpret_cast<const char*>(buffer.get()), cb_read) };
-    std::string line;
+std::vector<uint64_t> parse_candidate_dtbs(const std::string& dtb_txt, uint32_t process_id) {
+    std::vector<uint64_t> candidates;
     size_t parsed_entries = 0;
-    size_t matched_unowned = 0;
-    size_t matched_ours = 0;
+    size_t unowned = 0;
+    size_t owned = 0;
 
-    while (std::getline(lines, line)) {
+    std::istringstream lines{ dtb_txt };
+    for (std::string line; std::getline(lines, line);) {
         uint32_t index = 0;
-        DWORD entry_process_id = 0;
+        uint32_t entry_process_id = 0;
         uint64_t dtb = 0;
         uint64_t kernel_address = 0;
         std::string name;
 
-        std::istringstream fields(line);
-        if (fields >> std::hex >> index >> std::dec >> entry_process_id >> std::hex >> dtb >> kernel_address >> name) {
-            ++parsed_entries;
-            const bool unowned = (entry_process_id == 0);
-            const bool ours = (entry_process_id == this->process_id);
-            if (unowned || ours) {
-                unowned ? ++matched_unowned : ++matched_ours;
-                possible_dtbs.push_back(dtb);
-                logger.debug("Candidate DTB 0x{:x} from entry {:04x} (pid {}, name '{}') via {}.", dtb, index, entry_process_id, name, unowned ? "unowned PFN" : "own PID");
-            }
+        std::istringstream fields{ line };
+        if (!(fields >> std::hex >> index >> std::dec >> entry_process_id >> std::hex >> dtb >> kernel_address >> name)) {
+            continue;
         }
+
+        ++parsed_entries;
+        if (entry_process_id == 0) {
+            ++unowned;
+        } else if (entry_process_id == process_id) {
+            ++owned;
+        } else {
+            continue;
+        }
+        candidates.push_back(dtb);
     }
 
-    logger.info("Parsed {} dtb.txt entries; {} candidate DTB(s) ({} unowned, {} own PID).", parsed_entries, possible_dtbs.size(), matched_unowned, matched_ours);
+    logger.info("Parsed {} dtb.txt entries; {} candidate DTB(s) ({} unowned, {} own PID).", parsed_entries, candidates.size(), unowned, owned);
+    return candidates;
+}
 
-    for (size_t attempt = 1; const uint64_t dtb : possible_dtbs) {
-        VMMDLL_ConfigSet(this->dma.get_handle(), VMMDLL_OPT_PROCESS_DTB | this->process_id, dtb);
-        if (check_translation("CR3 fixed")) {
-            logger.info("Using DTB 0x{:x} (candidate {} of {}).", dtb, attempt, possible_dtbs.size());
+} // namespace
+
+bool Process::fix_cr3(const std::string& module_name) {
+    if (this->process_id == 0) {
+        logger.error("Cannot fix CR3: the process was not found.");
+        return false;
+    }
+
+    const VMM_HANDLE handle = this->dma.get_handle();
+    const std::string_view wanted_module = module_name.empty() ? std::string_view{ "a loader-list module" } : std::string_view{ module_name };
+    const auto check_translation = [this, handle, &module_name, wanted_module](std::string_view stage) {
+        detail::Resource<VMMDLL_MAP_MODULE> module_map;
+        if (!VMMDLL_Map_GetModuleU(handle, this->process_id, module_map.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
+            logger.debug("{}: PID {} resolves no modules.", stage, this->process_id);
+            return false;
+        }
+
+        if (module_map->dwVersion != VMMDLL_MAP_MODULE_VERSION) {
+            logger.error("{}: module map version 0x{:x} does not match the expected 0x{:x}.", stage, module_map->dwVersion, VMMDLL_MAP_MODULE_VERSION);
+            return false;
+        }
+
+        if (module_map->cMap == 0) {
+            logger.debug("{}: PID {} resolves no modules.", stage, this->process_id);
+            return false;
+        }
+
+        const std::span<const VMMDLL_MAP_MODULEENTRY> modules{ module_map->pMap, module_map->cMap };
+        const auto target = std::ranges::find_if(modules, [&module_name](const VMMDLL_MAP_MODULEENTRY& entry) {
+            return entry.tp == VMMDLL_MODULE_TP_NORMAL && (module_name.empty() || (entry.uszText && _stricmp(entry.uszText, module_name.c_str()) == 0));
+        });
+        if (target == modules.end()) {
+            const VMMDLL_MAP_MODULEENTRY& first = modules.front();
+            logger.debug("{}: PID {} resolves {} module(s), first '{}' at 0x{:x}, but not {}.", stage, this->process_id, modules.size(), first.uszText ? first.uszText : "?", first.vaBase, wanted_module);
+            return false;
+        }
+
+        const std::string_view target_name = target->uszText ? target->uszText : "?";
+        if (this->read<IMAGE_DOS_HEADER>(target->vaBase).e_magic != IMAGE_DOS_SIGNATURE) {
+            logger.debug("{}: PID {} resolves {} module(s) but {} at 0x{:x} did not read back as 'MZ'.", stage, this->process_id, modules.size(), target_name, target->vaBase);
+            return false;
+        }
+
+        logger.info("{}: PID {} resolves {} module(s); verified 'MZ' for {} at 0x{:x}.", stage, this->process_id, modules.size(), target_name, target->vaBase);
+        return true;
+    };
+
+    if (check_translation("Current DTB")) {
+        return true;
+    }
+
+    logger.info("CR3 fix needed: PID {} failed verification; searching for candidate DTBs.", this->process_id);
+
+    if (!wait_for_procinfo_scan(handle)) {
+        return false;
+    }
+
+    const std::optional<std::string> dtb_txt = read_vfs_file(handle, "\\misc\\procinfo\\", "dtb.txt");
+    if (!dtb_txt) {
+        return false;
+    }
+
+    const std::vector<uint64_t> candidates = parse_candidate_dtbs(*dtb_txt, this->process_id);
+    for (const auto [index, dtb] : std::views::enumerate(candidates)) {
+        VMMDLL_ConfigSet(handle, VMMDLL_OPT_PROCESS_DTB | this->process_id, dtb);
+        if (check_translation(std::format("Candidate {} of {} (DTB 0x{:x})", index + 1, candidates.size(), dtb))) {
+            logger.info("CR3 fixed: using DTB 0x{:x} (candidate {} of {}).", dtb, index + 1, candidates.size());
             return true;
         }
-        ++attempt;
     }
 
-    logger.error("Failed to patch PID {}: none of the {} candidate DTB(s) resolved any modules.", this->process_id, possible_dtbs.size());
+    VMMDLL_ConfigSet(handle, VMMDLL_OPT_PROCESS_DTB | this->process_id, 0);
+    logger.error("Failed to patch PID {}: none of the {} candidate DTB(s) verified {}.", this->process_id, candidates.size(), wanted_module);
     return false;
 }
 
