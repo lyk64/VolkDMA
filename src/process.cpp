@@ -31,13 +31,13 @@ namespace volk::dma {
 
 static constexpr volk::log::Logger logger{ "PROCESS" };
 
-Process::Process(const Device& dma, const std::string& process_name) : dma(dma), process_id(dma.get_process_id(process_name)) {}
-Process::Process(const Device& dma, uint32_t process_id) : dma(dma), process_id(process_id) {}
+Process::Process(const Device& dma, const std::string& process_name) : vmm(dma.get_handle()), process_id(dma.get_process_id(process_name)) {}
+Process::Process(const Device& dma, uint32_t process_id) : vmm(dma.get_handle()), process_id(process_id) {}
 
 uint64_t Process::get_base_address(const std::string& module_name) const {
     detail::Resource<VMMDLL_MAP_MODULEENTRY> module_entry{};
 
-    if (!VMMDLL_Map_GetModuleFromNameU(this->dma.get_handle(), this->process_id, module_name.c_str(), module_entry.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
+    if (!VMMDLL_Map_GetModuleFromNameU(this->vmm, this->process_id, module_name.c_str(), module_entry.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
         logger.error("Failed to find base address of module: {}.", module_name);
         return 0;
     }
@@ -46,7 +46,7 @@ uint64_t Process::get_base_address(const std::string& module_name) const {
 }
 
 uint64_t Process::get_export(const std::string& module_name, const std::string& export_name) const {
-    const uint64_t address = VMMDLL_ProcessGetProcAddressU(this->dma.get_handle(), this->process_id, module_name.c_str(), export_name.c_str());
+    const uint64_t address = VMMDLL_ProcessGetProcAddressU(this->vmm, this->process_id, module_name.c_str(), export_name.c_str());
     if (!address) {
         logger.error("Failed to resolve export {} in module {} (PID: {}).", export_name, module_name, this->process_id);
     }
@@ -57,7 +57,7 @@ uint64_t Process::get_export(const std::string& module_name, const std::string& 
 size_t Process::get_size(const std::string& module_name) const {
     detail::Resource<VMMDLL_MAP_MODULEENTRY> module_entry{};
 
-    if (!VMMDLL_Map_GetModuleFromNameU(this->dma.get_handle(), this->process_id, module_name.c_str(), module_entry.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
+    if (!VMMDLL_Map_GetModuleFromNameU(this->vmm, this->process_id, module_name.c_str(), module_entry.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
         logger.error("Failed to find size of module: {}.", module_name);
         return 0;
     }
@@ -127,7 +127,7 @@ bool Process::dump_module(const std::string& module_name, const std::string& pat
 std::string Process::get_path(const std::string& module_name) const {
     detail::Resource<VMMDLL_MAP_MODULEENTRY> mod;
 
-    if (!VMMDLL_Map_GetModuleFromNameU(this->dma.get_handle(), this->process_id, module_name.c_str(), mod.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
+    if (!VMMDLL_Map_GetModuleFromNameU(this->vmm, this->process_id, module_name.c_str(), mod.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
         logger.error("Failed to find path for module: {}.", module_name);
         return {};
     }
@@ -141,7 +141,7 @@ std::vector<std::string> Process::get_modules(uint32_t process_id) const {
     std::vector<std::string> modules;
     detail::Resource<VMMDLL_MAP_MODULE> module_map;
 
-    if (!VMMDLL_Map_GetModuleU(this->dma.get_handle(), target_process_id, module_map.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
+    if (!VMMDLL_Map_GetModuleU(this->vmm, target_process_id, module_map.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
         logger.error("Failed to get module list.");
         return modules;
     }
@@ -272,11 +272,10 @@ bool Process::fix_cr3(const std::string& module_name) {
         return false;
     }
 
-    const VMM_HANDLE handle = this->dma.get_handle();
     const std::string_view wanted_module = module_name.empty() ? std::string_view{ "a loader-list module" } : std::string_view{ module_name };
-    const auto check_translation = [this, handle, &module_name, wanted_module](std::string_view stage) {
+    const auto check_translation = [this, &module_name, wanted_module](std::string_view stage) {
         detail::Resource<VMMDLL_MAP_MODULE> module_map;
-        if (!VMMDLL_Map_GetModuleU(handle, this->process_id, module_map.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
+        if (!VMMDLL_Map_GetModuleU(this->vmm, this->process_id, module_map.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
             logger.debug("{}: PID {} resolves no modules.", stage, this->process_id);
             return false;
         }
@@ -317,25 +316,25 @@ bool Process::fix_cr3(const std::string& module_name) {
 
     logger.info("CR3 fix needed: PID {} failed verification; searching for candidate DTBs.", this->process_id);
 
-    if (!wait_for_procinfo_scan(handle)) {
+    if (!wait_for_procinfo_scan(this->vmm)) {
         return false;
     }
 
-    const std::optional<std::string> dtb_txt = read_vfs_file(handle, "\\misc\\procinfo\\", "dtb.txt");
+    const std::optional<std::string> dtb_txt = read_vfs_file(this->vmm, "\\misc\\procinfo\\", "dtb.txt");
     if (!dtb_txt) {
         return false;
     }
 
     const std::vector<uint64_t> candidates = parse_candidate_dtbs(*dtb_txt, this->process_id);
     for (const auto [index, dtb] : std::views::enumerate(candidates)) {
-        VMMDLL_ConfigSet(handle, VMMDLL_OPT_PROCESS_DTB | this->process_id, dtb);
+        VMMDLL_ConfigSet(this->vmm, VMMDLL_OPT_PROCESS_DTB | this->process_id, dtb);
         if (check_translation(std::format("Candidate {} of {} (DTB 0x{:x})", index + 1, candidates.size(), dtb))) {
             logger.info("CR3 fixed: using DTB 0x{:x} (candidate {} of {}).", dtb, index + 1, candidates.size());
             return true;
         }
     }
 
-    VMMDLL_ConfigSet(handle, VMMDLL_OPT_PROCESS_DTB | this->process_id, 0);
+    VMMDLL_ConfigSet(this->vmm, VMMDLL_OPT_PROCESS_DTB | this->process_id, 0);
     logger.error("Failed to patch PID {}: none of the {} candidate DTB(s) verified {}.", this->process_id, candidates.size(), wanted_module);
     return false;
 }
@@ -347,7 +346,7 @@ bool Process::read(uint64_t address, void* buffer, size_t size) const {
     }
 
     DWORD read_size = 0;
-    if (!VMMDLL_MemReadEx(this->dma.get_handle(), this->process_id, address, static_cast<PBYTE>(buffer), static_cast<DWORD>(size), &read_size, VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_ZEROPAD_ON_FAIL)) {
+    if (!VMMDLL_MemReadEx(this->vmm, this->process_id, address, static_cast<PBYTE>(buffer), static_cast<DWORD>(size), &read_size, VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_ZEROPAD_ON_FAIL)) {
         logger.error("Failed to read memory at 0x{:x} (PID: {}).", address, this->process_id);
         std::memset(buffer, 0, size);
         return false;
@@ -413,7 +412,7 @@ uint64_t Process::find_signature(const char* signature, uint64_t range_start, ui
     const uint64_t size = range_end - range_start;
     std::vector<uint8_t> buffer(size);
 
-    if (!VMMDLL_MemReadEx(this->dma.get_handle(), this->process_id, range_start, buffer.data(), static_cast<DWORD>(size), nullptr, VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_ZEROPAD_ON_FAIL)) {
+    if (!VMMDLL_MemReadEx(this->vmm, this->process_id, range_start, buffer.data(), static_cast<DWORD>(size), nullptr, VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_ZEROPAD_ON_FAIL)) {
         return 0;
     }
 
@@ -435,7 +434,7 @@ bool Process::write(uint64_t address, const void* buffer, size_t size, uint32_t 
 
     DWORD target_process_id = (process_id == 0) ? this->process_id : process_id;
 
-    if (!VMMDLL_MemWrite(this->dma.get_handle(), target_process_id, address, static_cast<PBYTE>(const_cast<void*>(buffer)), static_cast<DWORD>(size))) {
+    if (!VMMDLL_MemWrite(this->vmm, target_process_id, address, static_cast<PBYTE>(const_cast<void*>(buffer)), static_cast<DWORD>(size))) {
         logger.error("Failed to write memory at 0x{:x} (PID: {}).", address, target_process_id);
         return false;
     }
@@ -444,7 +443,7 @@ bool Process::write(uint64_t address, const void* buffer, size_t size, uint32_t 
 }
 
 Scatter Process::create_scatter(uint32_t process_id) const {
-    return Scatter(this->dma, (process_id != 0) ? process_id : this->process_id);
+    return Scatter(this->vmm, (process_id != 0) ? process_id : this->process_id);
 }
 
 } // namespace volk::dma

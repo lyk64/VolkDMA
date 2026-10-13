@@ -15,8 +15,8 @@ static constexpr volk::log::Logger logger{ "SCATTER" };
 
 static constexpr DWORD scatter_flags = VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_ZEROPAD_ON_FAIL | VMMDLL_FLAG_SCATTER_PREPAREEX_NOMEMZERO;
 
-Scatter::Scatter(const Device& dma, uint32_t process_id) : process_id(process_id) {
-    handle = VMMDLL_Scatter_Initialize(dma.get_handle(), process_id, scatter_flags);
+Scatter::Scatter(VMM_HANDLE vmm, uint32_t process_id) : process_id(process_id) {
+    handle = VMMDLL_Scatter_Initialize(vmm, process_id, scatter_flags);
     if (!handle) {
         logger.error("Failed to create handle.");
     }

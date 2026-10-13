@@ -13,10 +13,10 @@ namespace volk::dma {
 
 static constexpr volk::log::Logger logger{ "INPUTSTATE" };
 
-InputState::InputState(const Device& dma) : dma(dma) {
+InputState::InputState(const Device& dma) {
     const auto csrss_process_ids = dma.get_process_id_list("csrss.exe");
 
-    if (retrieve_gptCursorAsync(csrss_process_ids)) {
+    if (retrieve_gptCursorAsync(dma, csrss_process_ids)) {
         logger.info("Successfully retrieved gptCursorAsync.");
     }
     else {
@@ -28,7 +28,7 @@ InputState::InputState(const Device& dma) : dma(dma) {
         return;
     }
 
-    if (retrieve_gafAsyncKeyState(csrss_process_ids)) {
+    if (retrieve_gafAsyncKeyState(dma, csrss_process_ids)) {
         logger.info("Successfully retrieved gafAsyncKeyState.");
     }
     else {
@@ -36,7 +36,7 @@ InputState::InputState(const Device& dma) : dma(dma) {
     }
 }
 
-bool InputState::retrieve_gafAsyncKeyState(const std::vector<uint32_t>& csrss_process_ids) {
+bool InputState::retrieve_gafAsyncKeyState(const Device& dma, const std::vector<uint32_t>& csrss_process_ids) {
     if (windows_version_build > 22000) {
         if (csrss_process_ids.empty()) {
             logger.error("No csrss.exe processes found.");
@@ -115,7 +115,7 @@ bool InputState::retrieve_gafAsyncKeyState(const std::vector<uint32_t>& csrss_pr
     return true;
 }
 
-bool InputState::retrieve_gptCursorAsync(const std::vector<uint32_t>& csrss_process_ids) {
+bool InputState::retrieve_gptCursorAsync(const Device& dma, const std::vector<uint32_t>& csrss_process_ids) {
     if (csrss_process_ids.empty()) {
         logger.error("No csrss.exe processes found.");
         return false;

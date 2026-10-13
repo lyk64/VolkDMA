@@ -204,8 +204,6 @@ private:
         [[nodiscard]] bool resolved() const { return is_kernel_address(address) && process.has_value(); }
     };
 
-    const Device& dma;
-
     uint64_t windows_version_build{};
 
     KernelSymbol gptCursorAsync;
@@ -215,8 +213,8 @@ private:
     Bitmap prev_bitmap{};
 
     [[nodiscard]] static bool get_bit(const Bitmap& bitmap, uint8_t virtual_key_code);
-    [[nodiscard]] bool retrieve_gafAsyncKeyState(const std::vector<uint32_t>& csrss_process_ids);
-    [[nodiscard]] bool retrieve_gptCursorAsync(const std::vector<uint32_t>& csrss_process_ids);
+    [[nodiscard]] bool retrieve_gafAsyncKeyState(const Device& dma, const std::vector<uint32_t>& csrss_process_ids);
+    [[nodiscard]] bool retrieve_gptCursorAsync(const Device& dma, const std::vector<uint32_t>& csrss_process_ids);
 };
 
 } // namespace volk::dma

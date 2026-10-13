@@ -6,6 +6,9 @@
 
 #include "address.hh"
 
+struct tdVMM_HANDLE;
+using VMM_HANDLE = tdVMM_HANDLE*;
+
 namespace volk::dma {
 
 class Device;
@@ -53,8 +56,8 @@ public:
     }
 
 private:
-    const Device& dma;
-    const uint32_t process_id;
+    VMM_HANDLE vmm{};
+    uint32_t process_id{};
 };
 
 } // namespace volk::dma
