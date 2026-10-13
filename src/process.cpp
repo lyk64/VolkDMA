@@ -31,7 +31,20 @@ namespace volk::dma {
 
 static constexpr volk::log::Logger logger{ "PROCESS" };
 
-Process::Process(const Device& dma, const std::string& process_name) : vmm(dma.get_handle()), process_id(dma.get_process_id(process_name)) {}
+std::expected<Process, AttachError> Process::attach(const Device& dma, const std::string& process_name, const std::string& module_name) {
+    const std::optional<uint32_t> process_id = dma.get_process_id(process_name);
+    if (!process_id) {
+        return std::unexpected(AttachError::not_running);
+    }
+
+    Process process(dma, *process_id);
+    if (!process.fix_cr3(module_name)) {
+        return std::unexpected(AttachError::translation_failed);
+    }
+
+    return process;
+}
+
 Process::Process(const Device& dma, uint32_t process_id) : vmm(dma.get_handle()), process_id(process_id) {}
 
 uint64_t Process::get_base_address(const std::string& module_name) const {

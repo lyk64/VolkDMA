@@ -14,6 +14,15 @@ namespace volk::dma {
 
 static constexpr volk::log::Logger logger{ "DMA" };
 
+std::optional<Device> Device::open(bool use_memory_map) {
+    Device device{ use_memory_map };
+    if (!device.handle) {
+        return std::nullopt;
+    }
+
+    return device;
+}
+
 Device::Device(bool use_memory_map) {
     LPCSTR argv[8] = {"", "-device", "fpga://algo=0", "", "", "", "", ""};
     DWORD argc = 3;
@@ -40,11 +49,10 @@ Device::Device(bool use_memory_map) {
     this->clean_fpga();
 }
 
-uint32_t Device::get_process_id(const std::string& process_name) const {
+std::optional<uint32_t> Device::get_process_id(const std::string& process_name) const {
     DWORD process_id = 0;
-
     if (!VMMDLL_PidGetFromName(this->handle.get(), process_name.c_str(), &process_id) || process_id == 0) {
-        logger.error("Failed to get ID for process: {}.", process_name);
+        return std::nullopt;
     }
 
     return process_id;

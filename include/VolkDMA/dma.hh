@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -21,14 +22,16 @@ using VmmHandle = std::unique_ptr<std::remove_pointer_t<VMM_HANDLE>, decltype(vm
 
 class Device {
 public:
-    explicit Device(bool use_memory_map = true);
+    [[nodiscard]] static std::optional<Device> open(bool use_memory_map = true);
 
     [[nodiscard]] VMM_HANDLE get_handle() const noexcept { return handle.get(); }
 
-    [[nodiscard]] uint32_t get_process_id(const std::string& process_name) const;
+    [[nodiscard]] std::optional<uint32_t> get_process_id(const std::string& process_name) const;
     [[nodiscard]] std::vector<uint32_t> get_process_id_list(const std::string& process_name) const;
 
 private:
+    explicit Device(bool use_memory_map);
+
     detail::VmmHandle handle{};
     bool dump_memory_map();
     bool clean_fpga();

@@ -1,7 +1,9 @@
 #pragma once
 
 #include <cstdint>
+#include <expected>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "address.hh"
@@ -14,9 +16,23 @@ namespace volk::dma {
 class Device;
 class Scatter;
 
+enum class AttachError {
+    not_running,
+    translation_failed,
+};
+
+[[nodiscard]] constexpr std::string_view to_string(AttachError error) noexcept {
+    switch (error) {
+    case AttachError::not_running: return "not running";
+    case AttachError::translation_failed: return "address translation failed";
+    }
+    return "unknown";
+}
+
 class Process {
 public:
-    Process(const Device& dma, const std::string& process_name);
+    [[nodiscard]] static std::expected<Process, AttachError> attach(const Device& dma, const std::string& process_name, const std::string& module_name = {});
+
     Process(const Device& dma, uint32_t process_id);
     [[nodiscard]] uint64_t get_base_address(const std::string& module_name) const;
     [[nodiscard]] uint64_t get_export(const std::string& module_name, const std::string& export_name) const;

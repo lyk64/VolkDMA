@@ -99,13 +99,13 @@ bool InputState::retrieve_gafAsyncKeyState(const Device& dma, const std::vector<
     }
 
     // windows_version_build <= 22000
-    const uint32_t winlogon_process_id = dma.get_process_id("winlogon.exe");
+    const std::optional<uint32_t> winlogon_process_id = dma.get_process_id("winlogon.exe");
     if (!winlogon_process_id) {
         logger.error("Failed to get process ID for winlogon.exe.");
         return false;
     }
 
-    const Process winlogon_process(dma, winlogon_process_id | VMMDLL_PID_PROCESS_WITH_KERNELMEMORY);
+    const Process winlogon_process(dma, *winlogon_process_id | VMMDLL_PID_PROCESS_WITH_KERNELMEMORY);
 
     const uint64_t address = winlogon_process.get_export("win32kbase.sys", "gafAsyncKeyState");
     if (!is_kernel_address(address)) return false;
