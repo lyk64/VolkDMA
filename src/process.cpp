@@ -31,14 +31,14 @@ namespace volk::dma {
 
 static constexpr volk::log::Logger logger{ "PROCESS" };
 
-std::expected<Process, AttachError> Process::attach(const Device& dma, const std::string& process_name, const std::string& module_name) {
+std::expected<Process, AttachError> Process::attach(const Device& dma, const std::string& process_name, const std::string& module_name, std::stop_token stop_token) {
     const std::optional<uint32_t> process_id = dma.get_process_id(process_name);
     if (!process_id) {
         return std::unexpected(AttachError::not_running);
     }
 
     Process process(dma, *process_id);
-    if (!process.fix_cr3(module_name)) {
+    if (!process.fix_cr3(module_name, stop_token)) {
         return std::unexpected(AttachError::translation_failed);
     }
 
@@ -186,7 +186,7 @@ std::optional<int> read_procinfo_progress(VMM_HANDLE handle) {
     return percent;
 }
 
-bool wait_for_procinfo_scan(VMM_HANDLE handle) {
+bool wait_for_procinfo_scan(VMM_HANDLE handle, std::stop_token stop_token) {
     using namespace std::chrono_literals;
 
     if (!VMMDLL_InitializePlugins(handle)) {
@@ -204,6 +204,11 @@ bool wait_for_procinfo_scan(VMM_HANDLE handle) {
         if (last_percent == 100) {
             logger.debug("PFN scan completed in {}.", std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - scan_start));
             return true;
+        }
+
+        if (stop_token.stop_requested()) {
+            logger.info("Cancelled the procinfo PFN scan (last progress {}%).", last_percent);
+            return false;
         }
 
         std::this_thread::sleep_for(100ms);
@@ -279,7 +284,7 @@ std::vector<uint64_t> parse_candidate_dtbs(const std::string& dtb_txt, uint32_t 
 
 } // namespace
 
-bool Process::fix_cr3(const std::string& module_name) {
+bool Process::fix_cr3(const std::string& module_name, std::stop_token stop_token) {
     if (this->process_id == 0) {
         logger.error("Cannot fix CR3: the process was not found.");
         return false;
@@ -329,7 +334,7 @@ bool Process::fix_cr3(const std::string& module_name) {
 
     logger.info("CR3 fix needed: PID {} failed verification; searching for candidate DTBs.", this->process_id);
 
-    if (!wait_for_procinfo_scan(this->vmm)) {
+    if (!wait_for_procinfo_scan(this->vmm, stop_token)) {
         return false;
     }
 
@@ -340,6 +345,12 @@ bool Process::fix_cr3(const std::string& module_name) {
 
     const std::vector<uint64_t> candidates = parse_candidate_dtbs(*dtb_txt, this->process_id);
     for (const auto [index, dtb] : std::views::enumerate(candidates)) {
+        if (stop_token.stop_requested()) {
+            VMMDLL_ConfigSet(this->vmm, VMMDLL_OPT_PROCESS_DTB | this->process_id, 0);
+            logger.info("Cancelled the CR3 fix at candidate {} of {}.", index + 1, candidates.size());
+            return false;
+        }
+
         VMMDLL_ConfigSet(this->vmm, VMMDLL_OPT_PROCESS_DTB | this->process_id, dtb);
         if (check_translation(std::format("Candidate {} of {} (DTB 0x{:x})", index + 1, candidates.size(), dtb))) {
             logger.info("CR3 fixed: using DTB 0x{:x} (candidate {} of {}).", dtb, index + 1, candidates.size());

@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <expected>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -31,16 +32,17 @@ enum class AttachError {
 
 class Process {
 public:
-    [[nodiscard]] static std::expected<Process, AttachError> attach(const Device& dma, const std::string& process_name, const std::string& module_name = {});
+    [[nodiscard]] static std::expected<Process, AttachError> attach(const Device& dma, const std::string& process_name, const std::string& module_name = {}, std::stop_token stop_token = {});
 
     Process(const Device& dma, uint32_t process_id);
+    [[nodiscard]] uint32_t id() const noexcept { return process_id; }
     [[nodiscard]] uint64_t get_base_address(const std::string& module_name) const;
     [[nodiscard]] uint64_t get_export(const std::string& module_name, const std::string& export_name) const;
     [[nodiscard]] size_t get_size(const std::string& module_name) const;
     bool dump_module(const std::string& module_name, const std::string& path) const;
     [[nodiscard]] std::string get_path(const std::string& module_name) const;
     [[nodiscard]] std::vector<std::string> get_modules(uint32_t process_id = 0) const;
-    [[nodiscard]] bool fix_cr3(const std::string& module_name = {});
+    [[nodiscard]] bool fix_cr3(const std::string& module_name = {}, std::stop_token stop_token = {});
     bool read(uint64_t address, void* buffer, size_t size) const;
     [[nodiscard]] uint64_t read_chain(uint64_t base, const std::vector<uint64_t>& offsets) const;
     [[nodiscard]] std::string read_string(uint64_t address, size_t max_length = 256) const;

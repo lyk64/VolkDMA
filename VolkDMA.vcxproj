@@ -20,6 +20,7 @@
     <ClInclude Include="src\detail\resource.hh" />
     <ClInclude Include="include\VolkDMA\process.hh" />
     <ClInclude Include="include\VolkDMA\scatter.hh" />
+    <ClInclude Include="include\VolkDMA\session.hh" />
   </ItemGroup>
   <ItemGroup>
     <Library Include="external\leechcore\leechcore.lib" />
@@ -30,6 +31,7 @@
     <ClCompile Include="src\inputstate.cpp" />
     <ClCompile Include="src\process.cpp" />
     <ClCompile Include="src\scatter.cpp" />
+    <ClCompile Include="src\session.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
