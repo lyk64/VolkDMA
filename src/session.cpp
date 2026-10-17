@@ -13,7 +13,7 @@
 
 namespace volk::dma {
 
-static constexpr volk::log::Logger logger{ "SESSION" };
+static constexpr volk::log::Logger logger{ "dma.session" };
 
 namespace {
 

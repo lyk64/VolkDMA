@@ -12,7 +12,7 @@
 
 namespace volk::dma {
 
-static constexpr volk::log::Logger logger{ "DMA" };
+static constexpr volk::log::Logger logger{ "dma.device" };
 
 std::optional<Device> Device::open(bool use_memory_map) {
     Device device{ use_memory_map };

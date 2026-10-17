@@ -29,7 +29,7 @@
 
 namespace volk::dma {
 
-static constexpr volk::log::Logger logger{ "PROCESS" };
+static constexpr volk::log::Logger logger{ "dma.process" };
 
 std::expected<Process, AttachError> Process::attach(const Device& dma, const std::string& process_name, const std::string& module_name, std::stop_token stop_token) {
     const std::optional<uint32_t> process_id = dma.get_process_id(process_name);
