@@ -1,5 +1,5 @@
 #include "include/VolkDMA/session.hh"
-#include "include/VolkDMA/dma.hh"
+#include "include/VolkDMA/device.hh"
 
 #include <VolkLog/log.hh>
 

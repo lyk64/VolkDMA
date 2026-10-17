@@ -15,7 +15,7 @@
     <ClInclude Include="external\VolkLog\include\VolkLog\log.hh" />
     <ClInclude Include="external\vmm\vmmdll.h" />
     <ClInclude Include="include\VolkDMA\address.hh" />
-    <ClInclude Include="include\VolkDMA\dma.hh" />
+    <ClInclude Include="include\VolkDMA\device.hh" />
     <ClInclude Include="include\VolkDMA\inputstate.hh" />
     <ClInclude Include="src\detail\resource.hh" />
     <ClInclude Include="include\VolkDMA\process.hh" />
@@ -27,7 +27,7 @@
     <Library Include="external\vmm\vmm.lib" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\dma.cpp" />
+    <ClCompile Include="src\device.cpp" />
     <ClCompile Include="src\inputstate.cpp" />
     <ClCompile Include="src\process.cpp" />
     <ClCompile Include="src\scatter.cpp" />

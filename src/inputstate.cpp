@@ -5,7 +5,7 @@
 #include "external/vmm/vmmdll.h"
 
 #include "include/VolkDMA/address.hh"
-#include "include/VolkDMA/dma.hh"
+#include "include/VolkDMA/device.hh"
 #include "detail/resource.hh"
 #include "include/VolkDMA/process.hh"
 

@@ -39,7 +39,7 @@
     <ClInclude Include="include\VolkDMA\address.hh">
       <Filter>include\VolkDMA</Filter>
     </ClInclude>
-    <ClInclude Include="include\VolkDMA\dma.hh">
+    <ClInclude Include="include\VolkDMA\device.hh">
       <Filter>include\VolkDMA</Filter>
     </ClInclude>
     <ClInclude Include="include\VolkDMA\inputstate.hh">
@@ -67,7 +67,7 @@
     </Library>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\dma.cpp">
+    <ClCompile Include="src\device.cpp">
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\inputstate.cpp">
