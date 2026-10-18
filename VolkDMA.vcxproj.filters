@@ -25,6 +25,9 @@
     <Filter Include="src\detail">
       <UniqueIdentifier>{93caef52-fd09-4479-9c41-3e7f430dc11d}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\fpga">
+      <UniqueIdentifier>{4f1c2a7e-8b3d-4e5f-9a6b-1c2d3e4f5a6b}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="external\VolkLog\include\VolkLog\log.hh">
@@ -54,8 +57,14 @@
     <ClInclude Include="include\VolkDMA\session.hh">
       <Filter>include\VolkDMA</Filter>
     </ClInclude>
-    <ClInclude Include="src\detail\resource.hh">
+    <ClInclude Include="src\detail\backend.hh">
       <Filter>src\detail</Filter>
+    </ClInclude>
+    <ClInclude Include="src\fpga\fpga.hh">
+      <Filter>src\fpga</Filter>
+    </ClInclude>
+    <ClInclude Include="src\fpga\resource.hh">
+      <Filter>src\fpga</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -69,6 +78,18 @@
   <ItemGroup>
     <ClCompile Include="src\device.cpp">
       <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\fpga\fpga_device.cpp">
+      <Filter>src\fpga</Filter>
+    </ClCompile>
+    <ClCompile Include="src\fpga\fpga_input.cpp">
+      <Filter>src\fpga</Filter>
+    </ClCompile>
+    <ClCompile Include="src\fpga\fpga_process.cpp">
+      <Filter>src\fpga</Filter>
+    </ClCompile>
+    <ClCompile Include="src\fpga\fpga_scatter.cpp">
+      <Filter>src\fpga</Filter>
     </ClCompile>
     <ClCompile Include="src\inputstate.cpp">
       <Filter>src</Filter>

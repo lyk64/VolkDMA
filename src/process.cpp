@@ -3,29 +3,18 @@
 #include <VolkLog/log.hh>
 
 #include <algorithm>
-#include <array>
 #include <charconv>
-#include <chrono>
 #include <cstring>
 #include <filesystem>
-#include <format>
-#include <limits>
 #include <memory>
 #include <optional>
-#include <ranges>
-#include <span>
-#include <sstream>
 #include <string>
-#include <string_view>
-#include <thread>
 #include <vector>
 #include <windows.h>
 
-#include "external/vmm/vmmdll.h"
-
 #include "include/VolkDMA/device.hh"
-#include "detail/resource.hh"
 #include "include/VolkDMA/scatter.hh"
+#include "detail/backend.hh"
 
 namespace volk::dma {
 
@@ -45,21 +34,20 @@ std::expected<Process, AttachError> Process::attach(const Device& dma, const std
     return process;
 }
 
-Process::Process(const Device& dma, uint32_t process_id) : vmm(dma.get_handle()), process_id(process_id) {}
+Process::Process(const Device& dma, uint32_t process_id) : backend(dma.backend->open_process(process_id)), process_id(process_id) {}
 
 uint64_t Process::get_base_address(const std::string& module_name) const {
-    detail::Resource<VMMDLL_MAP_MODULEENTRY> module_entry{};
-
-    if (!VMMDLL_Map_GetModuleFromNameU(this->vmm, this->process_id, module_name.c_str(), module_entry.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
+    const std::optional<detail::ModuleInfo> module = backend->module(module_name);
+    if (!module) {
         logger.error("Failed to find base address of module: {}.", module_name);
         return 0;
     }
 
-    return static_cast<uint64_t>(module_entry->vaBase);
+    return module->base;
 }
 
 uint64_t Process::get_export(const std::string& module_name, const std::string& export_name) const {
-    const uint64_t address = VMMDLL_ProcessGetProcAddressU(this->vmm, this->process_id, module_name.c_str(), export_name.c_str());
+    const uint64_t address = backend->export_address(module_name, export_name);
     if (!address) {
         logger.error("Failed to resolve export {} in module {} (PID: {}).", export_name, module_name, this->process_id);
     }
@@ -68,14 +56,13 @@ uint64_t Process::get_export(const std::string& module_name, const std::string& 
 }
 
 size_t Process::get_size(const std::string& module_name) const {
-    detail::Resource<VMMDLL_MAP_MODULEENTRY> module_entry{};
-
-    if (!VMMDLL_Map_GetModuleFromNameU(this->vmm, this->process_id, module_name.c_str(), module_entry.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
+    const std::optional<detail::ModuleInfo> module = backend->module(module_name);
+    if (!module) {
         logger.error("Failed to find size of module: {}.", module_name);
         return 0;
     }
 
-    return static_cast<size_t>(module_entry->cbImageSize);
+    return module->size;
 }
 
 bool Process::dump_module(const std::string& module_name, const std::string& path) const {
@@ -138,229 +125,29 @@ bool Process::dump_module(const std::string& module_name, const std::string& pat
 }
 
 std::string Process::get_path(const std::string& module_name) const {
-    detail::Resource<VMMDLL_MAP_MODULEENTRY> mod;
-
-    if (!VMMDLL_Map_GetModuleFromNameU(this->vmm, this->process_id, module_name.c_str(), mod.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
+    const std::optional<detail::ModuleInfo> module = backend->module(module_name);
+    if (!module) {
         logger.error("Failed to find path for module: {}.", module_name);
         return {};
     }
 
-    return mod->uszFullName ? std::string(mod->uszFullName) : std::string{};
+    return module->path;
 }
 
 std::vector<std::string> Process::get_modules(uint32_t process_id) const {
-    DWORD target_process_id = (process_id != 0) ? process_id : this->process_id;
+    const uint32_t target_process_id = (process_id != 0) ? process_id : this->process_id;
 
-    std::vector<std::string> modules;
-    detail::Resource<VMMDLL_MAP_MODULE> module_map;
-
-    if (!VMMDLL_Map_GetModuleU(this->vmm, target_process_id, module_map.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
+    std::optional<std::vector<std::string>> modules = backend->modules(target_process_id);
+    if (!modules) {
         logger.error("Failed to get module list.");
-        return modules;
+        return {};
     }
 
-    for (DWORD i = 0; i < module_map->cMap; ++i) {
-        const auto& entry = module_map->pMap[i];
-        if (entry.uszText) {
-            modules.emplace_back(entry.uszText);
-        }
-    }
-
-    return modules;
+    return std::move(*modules);
 }
-
-namespace {
-
-std::optional<int> read_procinfo_progress(VMM_HANDLE handle) {
-    std::array<char, 3> raw{};
-    DWORD cb_read = 0;
-    if (VMMDLL_VfsReadU(handle, "\\misc\\procinfo\\progress_percent.txt", reinterpret_cast<PBYTE>(raw.data()), static_cast<DWORD>(raw.size()), &cb_read, 0) != VMMDLL_STATUS_SUCCESS) {
-        return std::nullopt;
-    }
-
-    int percent = 0;
-    if (std::from_chars(raw.data(), raw.data() + cb_read, percent).ec != std::errc{}) {
-        return std::nullopt;
-    }
-
-    return percent;
-}
-
-bool wait_for_procinfo_scan(VMM_HANDLE handle, std::stop_token stop_token) {
-    using namespace std::chrono_literals;
-
-    if (!VMMDLL_InitializePlugins(handle)) {
-        logger.error("Failed to initialize plugins.");
-        return false;
-    }
-
-    constexpr auto scan_timeout = 60s;
-    const auto scan_start = std::chrono::steady_clock::now();
-    const auto deadline = scan_start + scan_timeout;
-
-    int last_percent = -1;
-    while (std::chrono::steady_clock::now() < deadline) {
-        last_percent = read_procinfo_progress(handle).value_or(last_percent);
-        if (last_percent == 100) {
-            logger.debug("PFN scan completed in {}.", std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - scan_start));
-            return true;
-        }
-
-        if (stop_token.stop_requested()) {
-            logger.info("Cancelled the procinfo PFN scan (last progress {}%).", last_percent);
-            return false;
-        }
-
-        std::this_thread::sleep_for(100ms);
-    }
-
-    logger.error("Timed out after {} waiting for the procinfo PFN scan (last progress {}%).", scan_timeout, last_percent);
-    return false;
-}
-
-std::optional<std::string> read_vfs_file(VMM_HANDLE handle, const std::string& directory, std::string_view file_name) {
-    const detail::Resource<VMMDLL_VFS_FILELISTBLOB> listing{ VMMDLL_VfsListBlobU(handle, directory.c_str()) };
-    if (!listing || listing->dwVersion != VMMDLL_VFS_FILELISTBLOB_VERSION) {
-        logger.error("Failed to list {}.", directory);
-        return std::nullopt;
-    }
-
-    const std::span<const VMMDLL_VFS_FILELISTBLOB_ENTRY> entries{ listing->FileEntry, listing->cFileEntry };
-    const auto entry = std::ranges::find(entries, file_name, [&listing](const VMMDLL_VFS_FILELISTBLOB_ENTRY& candidate) {
-        return std::string_view(listing->uszMultiText + candidate.ouszName);
-    });
-    if (entry == entries.end() || entry->cbFileSize == 0 || entry->cbFileSize > (std::numeric_limits<DWORD>::max)()) {
-        logger.error("{}{} was not listed, is empty, or is not a readable file.", directory, file_name);
-        return std::nullopt;
-    }
-
-    const std::string path = std::format("{}{}", directory, file_name);
-    std::string content(static_cast<size_t>(entry->cbFileSize), '\0');
-    DWORD cb_read = 0;
-    if (const NTSTATUS status = VMMDLL_VfsReadU(handle, path.c_str(), reinterpret_cast<PBYTE>(content.data()), static_cast<DWORD>(content.size()), &cb_read, 0);
-        status != VMMDLL_STATUS_SUCCESS) {
-        logger.error("Failed to read {} (status 0x{:x}).", path, static_cast<uint32_t>(status));
-        return std::nullopt;
-    }
-
-    logger.debug("Read 0x{:x} of 0x{:x} bytes from {}.", cb_read, content.size(), path);
-    content.resize(cb_read);
-    return content;
-}
-
-std::vector<uint64_t> parse_candidate_dtbs(const std::string& dtb_txt, uint32_t process_id) {
-    std::vector<uint64_t> candidates;
-    size_t parsed_entries = 0;
-    size_t unowned = 0;
-    size_t owned = 0;
-
-    std::istringstream lines{ dtb_txt };
-    for (std::string line; std::getline(lines, line);) {
-        uint32_t index = 0;
-        uint32_t entry_process_id = 0;
-        uint64_t dtb = 0;
-        uint64_t kernel_address = 0;
-        std::string name;
-
-        std::istringstream fields{ line };
-        if (!(fields >> std::hex >> index >> std::dec >> entry_process_id >> std::hex >> dtb >> kernel_address >> name)) {
-            continue;
-        }
-
-        ++parsed_entries;
-        if (entry_process_id == 0) {
-            ++unowned;
-        } else if (entry_process_id == process_id) {
-            ++owned;
-        } else {
-            continue;
-        }
-        candidates.push_back(dtb);
-    }
-
-    logger.info("Parsed {} dtb.txt entries; {} candidate DTB(s) ({} unowned, {} own PID).", parsed_entries, candidates.size(), unowned, owned);
-    return candidates;
-}
-
-} // namespace
 
 bool Process::fix_cr3(const std::string& module_name, std::stop_token stop_token) {
-    if (this->process_id == 0) {
-        logger.error("Cannot fix CR3: the process was not found.");
-        return false;
-    }
-
-    const std::string_view wanted_module = module_name.empty() ? std::string_view{ "a loader-list module" } : std::string_view{ module_name };
-    const auto check_translation = [this, &module_name, wanted_module](std::string_view stage) {
-        detail::Resource<VMMDLL_MAP_MODULE> module_map;
-        if (!VMMDLL_Map_GetModuleU(this->vmm, this->process_id, module_map.out(), VMMDLL_MODULE_FLAG_NORMAL)) {
-            logger.debug("{}: PID {} resolves no modules.", stage, this->process_id);
-            return false;
-        }
-
-        if (module_map->dwVersion != VMMDLL_MAP_MODULE_VERSION) {
-            logger.error("{}: module map version 0x{:x} does not match the expected 0x{:x}.", stage, module_map->dwVersion, VMMDLL_MAP_MODULE_VERSION);
-            return false;
-        }
-
-        if (module_map->cMap == 0) {
-            logger.debug("{}: PID {} resolves no modules.", stage, this->process_id);
-            return false;
-        }
-
-        const std::span<const VMMDLL_MAP_MODULEENTRY> modules{ module_map->pMap, module_map->cMap };
-        const auto target = std::ranges::find_if(modules, [&module_name](const VMMDLL_MAP_MODULEENTRY& entry) {
-            return entry.tp == VMMDLL_MODULE_TP_NORMAL && (module_name.empty() || (entry.uszText && _stricmp(entry.uszText, module_name.c_str()) == 0));
-        });
-        if (target == modules.end()) {
-            const VMMDLL_MAP_MODULEENTRY& first = modules.front();
-            logger.debug("{}: PID {} resolves {} module(s), first '{}' at 0x{:x}, but not {}.", stage, this->process_id, modules.size(), first.uszText ? first.uszText : "?", first.vaBase, wanted_module);
-            return false;
-        }
-
-        const std::string_view target_name = target->uszText ? target->uszText : "?";
-        if (this->read<IMAGE_DOS_HEADER>(target->vaBase).e_magic != IMAGE_DOS_SIGNATURE) {
-            logger.debug("{}: PID {} resolves {} module(s) but {} at 0x{:x} did not read back as 'MZ'.", stage, this->process_id, modules.size(), target_name, target->vaBase);
-            return false;
-        }
-
-        logger.info("{}: PID {} resolves {} module(s); verified 'MZ' for {} at 0x{:x}.", stage, this->process_id, modules.size(), target_name, target->vaBase);
-        return true;
-    };
-
-    if (check_translation("Current DTB")) {
-        return true;
-    }
-
-    logger.info("CR3 fix needed: PID {} failed verification; searching for candidate DTBs.", this->process_id);
-
-    if (!wait_for_procinfo_scan(this->vmm, stop_token)) {
-        return false;
-    }
-
-    const std::optional<std::string> dtb_txt = read_vfs_file(this->vmm, "\\misc\\procinfo\\", "dtb.txt");
-    if (!dtb_txt) {
-        return false;
-    }
-
-    const std::vector<uint64_t> candidates = parse_candidate_dtbs(*dtb_txt, this->process_id);
-    for (const auto [index, dtb] : std::views::enumerate(candidates)) {
-        if (stop_token.stop_requested()) {
-            VMMDLL_ConfigSet(this->vmm, VMMDLL_OPT_PROCESS_DTB | this->process_id, 0);
-            logger.info("Cancelled the CR3 fix at candidate {} of {}.", index + 1, candidates.size());
-            return false;
-        }
-
-        VMMDLL_ConfigSet(this->vmm, VMMDLL_OPT_PROCESS_DTB | this->process_id, dtb);
-        if (check_translation(std::format("Candidate {} of {} (DTB 0x{:x})", index + 1, candidates.size(), dtb))) {
-            logger.info("CR3 fixed: using DTB 0x{:x} (candidate {} of {}).", dtb, index + 1, candidates.size());
-            return true;
-        }
-    }
-
-    VMMDLL_ConfigSet(this->vmm, VMMDLL_OPT_PROCESS_DTB | this->process_id, 0);
-    logger.error("Failed to patch PID {}: none of the {} candidate DTB(s) verified {}.", this->process_id, candidates.size(), wanted_module);
-    return false;
+    return backend->fix_cr3(module_name, stop_token);
 }
 
 bool Process::read(uint64_t address, void* buffer, size_t size) const {
@@ -369,14 +156,14 @@ bool Process::read(uint64_t address, void* buffer, size_t size) const {
         return false;
     }
 
-    DWORD read_size = 0;
-    if (!VMMDLL_MemReadEx(this->vmm, this->process_id, address, static_cast<PBYTE>(buffer), static_cast<DWORD>(size), &read_size, VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_ZEROPAD_ON_FAIL)) {
+    const std::optional<size_t> read_size = backend->read(address, buffer, size);
+    if (!read_size) {
         logger.error("Failed to read memory at 0x{:x} (PID: {}).", address, this->process_id);
         std::memset(buffer, 0, size);
         return false;
     }
 
-    return read_size == size;
+    return *read_size == size;
 }
 
 uint64_t Process::read_chain(uint64_t base, const std::vector<uint64_t>& offsets) const {
@@ -436,7 +223,7 @@ uint64_t Process::find_signature(const char* signature, uint64_t range_start, ui
     const uint64_t size = range_end - range_start;
     std::vector<uint8_t> buffer(size);
 
-    if (!VMMDLL_MemReadEx(this->vmm, this->process_id, range_start, buffer.data(), static_cast<DWORD>(size), nullptr, VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_ZEROPAD_ON_FAIL)) {
+    if (!backend->read(range_start, buffer.data(), size)) {
         return 0;
     }
 
@@ -456,9 +243,9 @@ bool Process::write(uint64_t address, const void* buffer, size_t size, uint32_t 
         return false;
     }
 
-    DWORD target_process_id = (process_id == 0) ? this->process_id : process_id;
+    const uint32_t target_process_id = (process_id == 0) ? this->process_id : process_id;
 
-    if (!VMMDLL_MemWrite(this->vmm, target_process_id, address, static_cast<PBYTE>(const_cast<void*>(buffer)), static_cast<DWORD>(size))) {
+    if (!backend->write(target_process_id, address, buffer, size)) {
         logger.error("Failed to write memory at 0x{:x} (PID: {}).", address, target_process_id);
         return false;
     }
@@ -467,7 +254,7 @@ bool Process::write(uint64_t address, const void* buffer, size_t size, uint32_t 
 }
 
 Scatter Process::create_scatter(uint32_t process_id) const {
-    return Scatter(this->vmm, (process_id != 0) ? process_id : this->process_id);
+    return Scatter(backend->create_scatter((process_id != 0) ? process_id : this->process_id));
 }
 
 } // namespace volk::dma

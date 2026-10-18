@@ -1,16 +1,19 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <type_traits>
 #include <vector>
-
-struct tdVMM_HANDLE;
-using VMM_HANDLE = tdVMM_HANDLE*;
-using VMMDLL_SCATTER_HANDLE = void*;
 
 namespace volk::dma {
 
 class Process;
+
+namespace detail {
+
+class ScatterBackend;
+
+} // namespace detail
 
 class Scatter {
 public:
@@ -44,11 +47,10 @@ public:
 
 private:
     friend class Process;
-    Scatter(VMM_HANDLE vmm, uint32_t process_id);
 
-    uint32_t process_id;
-    VMMDLL_SCATTER_HANDLE handle{};
-    int pending_count{};
+    explicit Scatter(std::unique_ptr<detail::ScatterBackend> backend);
+
+    std::unique_ptr<detail::ScatterBackend> backend;
 };
 
 } // namespace volk::dma

@@ -9,14 +9,11 @@
 struct tdVMM_HANDLE;
 using VMM_HANDLE = tdVMM_HANDLE*;
 
-extern "C" void VMMDLL_Close(VMM_HANDLE);
-
 namespace volk::dma {
 
 namespace detail {
 
-inline constexpr auto vmm_close = [](VMM_HANDLE h) noexcept { if (h) VMMDLL_Close(h); };
-using VmmHandle = std::unique_ptr<std::remove_pointer_t<VMM_HANDLE>, decltype(vmm_close)>;
+class DeviceBackend;
 
 } // namespace detail
 
@@ -24,17 +21,18 @@ class Device {
 public:
     [[nodiscard]] static std::optional<Device> open(bool use_memory_map = true);
 
-    [[nodiscard]] VMM_HANDLE get_handle() const noexcept { return handle.get(); }
+    [[nodiscard]] VMM_HANDLE get_handle() const noexcept;
 
     [[nodiscard]] std::optional<uint32_t> get_process_id(const std::string& process_name) const;
     [[nodiscard]] std::vector<uint32_t> get_process_id_list(const std::string& process_name) const;
 
 private:
-    explicit Device(bool use_memory_map);
+    friend class Process;
+    friend class InputState;
 
-    detail::VmmHandle handle{};
-    bool dump_memory_map();
-    bool clean_fpga();
+    explicit Device(std::shared_ptr<detail::DeviceBackend> backend);
+
+    std::shared_ptr<detail::DeviceBackend> backend;
 };
 
 } // namespace volk::dma

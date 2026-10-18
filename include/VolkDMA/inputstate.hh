@@ -3,20 +3,26 @@
 #include <array>
 #include <bitset>
 #include <cstdint>
-#include <optional>
+#include <memory>
 #include <string_view>
-#include <vector>
-
-#include "address.hh"
-#include "process.hh"
 
 namespace volk::dma {
 
 class Device;
 
+namespace detail {
+
+class InputBackend;
+
+} // namespace detail
+
 class InputState {
 public:
     explicit InputState(const Device& dma);
+    ~InputState();
+
+    InputState(InputState&& other) noexcept;
+    InputState& operator=(InputState&& other) noexcept;
 
     struct Point {
         int32_t x;
@@ -195,23 +201,10 @@ public:
     });
 
 private:
-    struct KernelSymbol {
-        uint64_t address{};
-        std::optional<Process> process;
-
-        [[nodiscard]] bool resolved() const { return is_kernel_address(address) && process.has_value(); }
-    };
-
-    uint64_t windows_version_build{};
-
-    KernelSymbol gptCursorAsync;
-    KernelSymbol gafAsyncKeyState;
+    std::unique_ptr<detail::InputBackend> backend;
 
     std::bitset<256> keys;
     std::bitset<256> previous_keys;
-
-    [[nodiscard]] bool retrieve_gafAsyncKeyState(const Device& dma, const std::vector<uint32_t>& csrss_process_ids);
-    [[nodiscard]] bool retrieve_gptCursorAsync(const Device& dma, const std::vector<uint32_t>& csrss_process_ids);
 };
 
 } // namespace volk::dma

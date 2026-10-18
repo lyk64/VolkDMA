@@ -17,7 +17,9 @@
     <ClInclude Include="include\VolkDMA\address.hh" />
     <ClInclude Include="include\VolkDMA\device.hh" />
     <ClInclude Include="include\VolkDMA\inputstate.hh" />
-    <ClInclude Include="src\detail\resource.hh" />
+    <ClInclude Include="src\detail\backend.hh" />
+    <ClInclude Include="src\fpga\fpga.hh" />
+    <ClInclude Include="src\fpga\resource.hh" />
     <ClInclude Include="include\VolkDMA\process.hh" />
     <ClInclude Include="include\VolkDMA\scatter.hh" />
     <ClInclude Include="include\VolkDMA\session.hh" />
@@ -28,6 +30,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\device.cpp" />
+    <ClCompile Include="src\fpga\fpga_device.cpp" />
+    <ClCompile Include="src\fpga\fpga_input.cpp" />
+    <ClCompile Include="src\fpga\fpga_process.cpp" />
+    <ClCompile Include="src\fpga\fpga_scatter.cpp" />
     <ClCompile Include="src\inputstate.cpp" />
     <ClCompile Include="src\process.cpp" />
     <ClCompile Include="src\scatter.cpp" />

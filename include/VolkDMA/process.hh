@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <expected>
+#include <memory>
 #include <stop_token>
 #include <string>
 #include <string_view>
@@ -9,13 +10,16 @@
 
 #include "address.hh"
 
-struct tdVMM_HANDLE;
-using VMM_HANDLE = tdVMM_HANDLE*;
-
 namespace volk::dma {
 
 class Device;
 class Scatter;
+
+namespace detail {
+
+class ProcessBackend;
+
+} // namespace detail
 
 enum class AttachError {
     not_running,
@@ -74,7 +78,7 @@ public:
     }
 
 private:
-    VMM_HANDLE vmm{};
+    std::shared_ptr<detail::ProcessBackend> backend;
     uint32_t process_id{};
 };
 
