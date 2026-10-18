@@ -2,6 +2,8 @@
 
 #include <VolkLog/log.hh>
 
+#include <span>
+
 #include "external/vmm/vmmdll.h"
 
 #include "include/VolkDMA/address.hh"
@@ -12,6 +14,15 @@
 namespace volk::dma {
 
 static constexpr volk::log::Logger logger{ "dma.inputstate" };
+
+namespace {
+
+bool is_down_in_win32k_table(std::span<const uint8_t> table, size_t key) {
+    const size_t bit = key * 2;
+    return (table[bit / 8] >> (bit % 8)) & 1;
+}
+
+} // namespace
 
 InputState::InputState(const Device& dma) {
     const auto csrss_process_ids = dma.get_process_id_list("csrss.exe");
@@ -146,21 +157,21 @@ InputState::Point InputState::get_cursor_position() const {
 bool InputState::read_bitmap() {
     if (!gafAsyncKeyState.resolved()) return false;
 
-    prev_bitmap = state_bitmap;
-    return gafAsyncKeyState.process->read(gafAsyncKeyState.address, state_bitmap.data(), state_bitmap.size());
-}
+    std::array<uint8_t, 256 * 2 / 8> table{};
+    const bool read = gafAsyncKeyState.process->read(gafAsyncKeyState.address, table.data(), table.size());
 
-bool InputState::get_bit(const Bitmap& bitmap, uint8_t virtual_key_code) {
-    const size_t bit_index = static_cast<size_t>(virtual_key_code) * 2;
-    return (bitmap[bit_index / 8] & (1u << (bit_index % 8))) != 0;
+    previous_keys = keys;
+    for (size_t key = 0; key < keys.size(); ++key)
+        keys[key] = is_down_in_win32k_table(table, key);
+    return read;
 }
 
 bool InputState::is_key_held(uint8_t virtual_key_code) const {
-    return get_bit(state_bitmap, virtual_key_code);
+    return keys.test(virtual_key_code);
 }
 
 bool InputState::is_key_pressed(uint8_t virtual_key_code) const {
-    return get_bit(state_bitmap, virtual_key_code) && !get_bit(prev_bitmap, virtual_key_code);
+    return keys.test(virtual_key_code) && !previous_keys.test(virtual_key_code);
 }
 
 void InputState::print_down_keys() const {

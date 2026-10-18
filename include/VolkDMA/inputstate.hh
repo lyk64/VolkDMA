@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <bitset>
 #include <cstdint>
 #include <optional>
 #include <string_view>
@@ -194,9 +195,6 @@ public:
     });
 
 private:
-    static constexpr size_t bitmap_size = 256 * 2 / 8;
-    using Bitmap = std::array<uint8_t, bitmap_size>;
-
     struct KernelSymbol {
         uint64_t address{};
         std::optional<Process> process;
@@ -209,10 +207,9 @@ private:
     KernelSymbol gptCursorAsync;
     KernelSymbol gafAsyncKeyState;
 
-    Bitmap state_bitmap{};
-    Bitmap prev_bitmap{};
+    std::bitset<256> keys;
+    std::bitset<256> previous_keys;
 
-    [[nodiscard]] static bool get_bit(const Bitmap& bitmap, uint8_t virtual_key_code);
     [[nodiscard]] bool retrieve_gafAsyncKeyState(const Device& dma, const std::vector<uint32_t>& csrss_process_ids);
     [[nodiscard]] bool retrieve_gptCursorAsync(const Device& dma, const std::vector<uint32_t>& csrss_process_ids);
 };
