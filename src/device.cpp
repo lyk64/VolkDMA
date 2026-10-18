@@ -5,15 +5,40 @@
 #include "detail/backend.hh"
 #include "fpga/fpga.hh"
 
+#ifdef VOLKDMA_LOCAL_BACKEND
+#include "local/local.hh"
+#endif
+
 namespace volk::dma {
 
-std::optional<Device> Device::open(bool use_memory_map) {
-    auto backend = fpga::open_device(use_memory_map);
-    if (!backend) {
-        return std::nullopt;
+namespace {
+
+std::shared_ptr<detail::DeviceBackend> open_local_device() {
+#ifdef VOLKDMA_LOCAL_BACKEND
+    return local::open_device();
+#else
+    return nullptr;
+#endif
+}
+
+} // namespace
+
+std::expected<Device, OpenError> Device::open(const DeviceOptions& options) {
+    switch (options.backend) {
+    case Backend::fpga:
+        if (auto backend = fpga::open_device(options.use_memory_map)) {
+            return Device{ std::move(backend) };
+        }
+        return std::unexpected(OpenError::initialization_failed);
+
+    case Backend::local:
+        if (auto backend = open_local_device()) {
+            return Device{ std::move(backend) };
+        }
+        return std::unexpected(OpenError::backend_unavailable);
     }
 
-    return Device{ std::move(backend) };
+    return std::unexpected(OpenError::backend_unavailable);
 }
 
 Device::Device(std::shared_ptr<detail::DeviceBackend> backend) : backend(std::move(backend)) {}

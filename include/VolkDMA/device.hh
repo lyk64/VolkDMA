@@ -1,9 +1,11 @@
 #pragma once
 
 #include <cstdint>
+#include <expected>
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 struct tdVMM_HANDLE;
@@ -17,9 +19,32 @@ class DeviceBackend;
 
 } // namespace detail
 
+enum class Backend {
+    fpga,
+    local,
+};
+
+struct DeviceOptions {
+    Backend backend = Backend::fpga;
+    bool use_memory_map = true;
+};
+
+enum class OpenError {
+    initialization_failed,
+    backend_unavailable,
+};
+
+[[nodiscard]] constexpr std::string_view to_string(OpenError error) noexcept {
+    switch (error) {
+    case OpenError::initialization_failed: return "initialization failed";
+    case OpenError::backend_unavailable: return "backend not available in this build";
+    }
+    return "unknown";
+}
+
 class Device {
 public:
-    [[nodiscard]] static std::optional<Device> open(bool use_memory_map = true);
+    [[nodiscard]] static std::expected<Device, OpenError> open(const DeviceOptions& options = {});
 
     [[nodiscard]] VMM_HANDLE get_handle() const noexcept;
 

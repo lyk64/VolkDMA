@@ -20,6 +20,7 @@
     <ClInclude Include="src\detail\backend.hh" />
     <ClInclude Include="src\fpga\fpga.hh" />
     <ClInclude Include="src\fpga\resource.hh" />
+    <ClInclude Include="src\local\local.hh" />
     <ClInclude Include="include\VolkDMA\process.hh" />
     <ClInclude Include="include\VolkDMA\scatter.hh" />
     <ClInclude Include="include\VolkDMA\session.hh" />
@@ -34,6 +35,21 @@
     <ClCompile Include="src\fpga\fpga_input.cpp" />
     <ClCompile Include="src\fpga\fpga_process.cpp" />
     <ClCompile Include="src\fpga\fpga_scatter.cpp" />
+    <ClCompile Include="src\local\local_device.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="src\local\local_input.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="src\local\local_process.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="src\local\local_scatter.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="src\local\local_text.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="src\inputstate.cpp" />
     <ClCompile Include="src\process.cpp" />
     <ClCompile Include="src\scatter.cpp" />
@@ -86,7 +102,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_LIB;VOLKDMA_LOCAL_BACKEND;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>
