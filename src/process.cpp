@@ -187,10 +187,20 @@ uint64_t Process::read_chain(uint64_t base, const std::vector<uint64_t>& offsets
 }
 
 std::string Process::read_string(uint64_t address, size_t max_length) const {
-    std::string buffer(max_length, '\0');
-    this->read(address, buffer.data(), max_length);
-    buffer.erase(std::ranges::find(buffer, '\0'), buffer.end());
-    return buffer;
+    constexpr size_t chunk_size = 1 << 20;
+
+    std::string text;
+    while (text.size() < max_length) {
+        const size_t chunk_start = text.size();
+        text.resize(chunk_start + (std::min)(chunk_size, max_length - chunk_start));
+        this->read(address + chunk_start, text.data() + chunk_start, text.size() - chunk_start);
+
+        if (const size_t end = text.find('\0', chunk_start); end != std::string::npos) {
+            text.resize(end);
+            break;
+        }
+    }
+    return text;
 }
 
 uint64_t Process::find_signature(const char* signature, uint64_t range_start, uint64_t range_end) const {
