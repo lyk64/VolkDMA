@@ -26,6 +26,17 @@ namespace {
 
 constexpr volk::log::Logger logger{ "dma.process" };
 
+enum class VadAccess : uint32_t {
+    none,
+    read,
+    execute,
+    execute_read,
+    read_write,
+    write_copy,
+    execute_read_write,
+    execute_write_copy,
+};
+
 std::optional<int> read_procinfo_progress(VMM_HANDLE handle) {
     std::array<char, 3> raw{};
     DWORD cb_read = 0;
@@ -186,6 +197,31 @@ public:
         }
 
         return names;
+    }
+
+    std::optional<std::vector<MemoryRegion>> regions() const override {
+        detail::Resource<VMMDLL_MAP_VAD> vad_map;
+        if (!VMMDLL_Map_GetVadU(vmm.get(), process_id, FALSE, vad_map.out()) || vad_map->dwVersion != VMMDLL_MAP_VAD_VERSION) {
+            return std::nullopt;
+        }
+
+        std::vector<MemoryRegion> regions;
+        regions.reserve(vad_map->cMap);
+        for (const VMMDLL_MAP_VADENTRY& entry : std::span<const VMMDLL_MAP_VADENTRY>{ vad_map->pMap, vad_map->cMap }) {
+            const auto access = static_cast<VadAccess>(entry.Protection & 7);
+            const bool guard = (entry.Protection >> 3) == 2;
+            regions.push_back({
+                .base = entry.vaStart,
+                .size = entry.vaEnd - entry.vaStart + 1,
+                .readable = !guard && access != VadAccess::none && access != VadAccess::execute,
+                .writable = !guard && access >= VadAccess::read_write,
+                .executable = !guard && (access == VadAccess::execute || access == VadAccess::execute_read ||
+                                         access == VadAccess::execute_read_write || access == VadAccess::execute_write_copy),
+                .is_private = entry.fPrivateMemory != 0,
+            });
+        }
+
+        return regions;
     }
 
     bool fix_cr3(const std::string& module_name, std::stop_token stop_token) override {

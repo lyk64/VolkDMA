@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "include/VolkDMA/inputstate.hh"
+#include "include/VolkDMA/process.hh"
 
 struct tdVMM_HANDLE;
 using VMM_HANDLE = tdVMM_HANDLE*;
@@ -43,6 +44,7 @@ public:
     [[nodiscard]] virtual std::optional<ModuleInfo> module(const std::string& module_name) const = 0;
     [[nodiscard]] virtual uint64_t export_address(const std::string& module_name, const std::string& export_name) const = 0;
     [[nodiscard]] virtual std::optional<std::vector<std::string>> modules(uint32_t process_id) const = 0;
+    [[nodiscard]] virtual std::optional<std::vector<MemoryRegion>> regions() const = 0;
     [[nodiscard]] virtual bool fix_cr3(const std::string& module_name, std::stop_token stop_token) = 0;
     [[nodiscard]] virtual std::unique_ptr<ScatterBackend> create_scatter(uint32_t process_id) const = 0;
 };

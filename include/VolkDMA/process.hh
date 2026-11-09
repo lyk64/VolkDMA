@@ -34,6 +34,15 @@ enum class AttachError {
     return "unknown";
 }
 
+struct MemoryRegion {
+    uint64_t base{};
+    uint64_t size{};
+    bool readable{};
+    bool writable{};
+    bool executable{};
+    bool is_private{};
+};
+
 class Process {
 public:
     [[nodiscard]] static std::expected<Process, AttachError> attach(const Device& dma, const std::string& process_name, const std::string& module_name = {}, std::stop_token stop_token = {});
@@ -46,6 +55,7 @@ public:
     bool dump_module(const std::string& module_name, const std::string& path) const;
     [[nodiscard]] std::string get_path(const std::string& module_name) const;
     [[nodiscard]] std::vector<std::string> get_modules(uint32_t process_id = 0) const;
+    [[nodiscard]] std::vector<MemoryRegion> regions() const;
     [[nodiscard]] bool fix_cr3(const std::string& module_name = {}, std::stop_token stop_token = {});
     bool read(uint64_t address, void* buffer, size_t size) const;
     [[nodiscard]] uint64_t read_chain(uint64_t base, const std::vector<uint64_t>& offsets) const;

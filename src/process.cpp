@@ -146,6 +146,16 @@ std::vector<std::string> Process::get_modules(uint32_t process_id) const {
     return std::move(*modules);
 }
 
+std::vector<MemoryRegion> Process::regions() const {
+    std::optional<std::vector<MemoryRegion>> regions = backend->regions();
+    if (!regions) {
+        logger.error("Failed to get the memory regions of PID {}.", process_id);
+        return {};
+    }
+
+    return std::move(*regions);
+}
+
 bool Process::fix_cr3(const std::string& module_name, std::stop_token stop_token) {
     return backend->fix_cr3(module_name, stop_token);
 }

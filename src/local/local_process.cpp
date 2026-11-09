@@ -14,7 +14,10 @@ namespace {
 
 constexpr volk::log::Logger logger{ "dma.process" };
 
-constexpr DWORD access_rights = PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_VM_OPERATION | PROCESS_QUERY_LIMITED_INFORMATION;
+constexpr DWORD access_rights = PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_VM_OPERATION | PROCESS_QUERY_INFORMATION;
+constexpr DWORD readable_protections = PAGE_READONLY | PAGE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY;
+constexpr DWORD writable_protections = PAGE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY;
+constexpr DWORD executable_protections = PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY;
 
 template <class Visitor>
 bool for_each_module(uint32_t process_id, Visitor&& visit) {
@@ -140,6 +143,33 @@ public:
         }
 
         return names;
+    }
+
+    std::optional<std::vector<MemoryRegion>> regions() const override {
+        if (!handle) {
+            return std::nullopt;
+        }
+
+        std::vector<MemoryRegion> regions;
+        MEMORY_BASIC_INFORMATION info{};
+        for (uint64_t address = 0; VirtualQueryEx(handle.get(), reinterpret_cast<LPCVOID>(address), &info, sizeof(info)) == sizeof(info);
+             address = reinterpret_cast<uint64_t>(info.BaseAddress) + info.RegionSize) {
+            if (info.State != MEM_COMMIT) {
+                continue;
+            }
+
+            const bool guard = (info.Protect & (PAGE_GUARD | PAGE_NOACCESS)) != 0;
+            regions.push_back({
+                .base = reinterpret_cast<uint64_t>(info.BaseAddress),
+                .size = info.RegionSize,
+                .readable = !guard && (info.Protect & readable_protections) != 0,
+                .writable = !guard && (info.Protect & writable_protections) != 0,
+                .executable = !guard && (info.Protect & executable_protections) != 0,
+                .is_private = info.Type == MEM_PRIVATE,
+            });
+        }
+
+        return regions;
     }
 
     bool fix_cr3(const std::string&, std::stop_token) override {
