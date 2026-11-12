@@ -11,9 +11,34 @@
 #include <thread>
 #include <utility>
 
+#include "detail/backend.hh"
+
 namespace volk::dma {
 
 static constexpr volk::log::Logger logger{ "dma.session" };
+
+namespace detail {
+
+class SessionRefresh {
+public:
+    [[nodiscard]] explicit SessionRefresh(const Device& dma) : backend(*dma.backend) { backend.pause_process_refresh(); }
+    ~SessionRefresh() { backend.resume_process_refresh(); }
+
+    SessionRefresh(const SessionRefresh&) = delete;
+    SessionRefresh& operator=(const SessionRefresh&) = delete;
+
+    void refresh(const Process& process) {
+        if (!backend.refresh_process(process.id()) && !std::exchange(failure_logged, true)) {
+            logger.warn("Could not refresh PID {}; its exit may go unnoticed.", process.id());
+        }
+    }
+
+private:
+    DeviceBackend& backend;
+    bool failure_logged = false;
+};
+
+} // namespace detail
 
 namespace {
 
@@ -91,10 +116,15 @@ void run_sessions(std::stop_token stop_token, const Device& dma, const std::stri
         std::stop_source session_stop;
         const std::stop_callback forward_stop(stop_token, [&] { session_stop.request_stop(); });
 
+        detail::SessionRefresh session_refresh(dma);
+
         std::jthread exit_watch([&](std::stop_token watch_token) {
             while (!watch_token.stop_requested()) {
                 sleep_for(watch_token, options.poll_interval);
-                if (!watch_token.stop_requested() && !is_live(dma, process_name, *process)) {
+                if (watch_token.stop_requested()) return;
+
+                session_refresh.refresh(*process);
+                if (!is_live(dma, process_name, *process)) {
                     logger.info("{} exited.", process_name);
                     session_stop.request_stop();
                     return;

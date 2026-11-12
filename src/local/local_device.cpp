@@ -58,6 +58,10 @@ public:
     std::unique_ptr<detail::InputBackend> create_input(const Device&) const override {
         return open_input();
     }
+
+    void pause_process_refresh() override {}
+    void resume_process_refresh() override {}
+    bool refresh_process(uint32_t) override { return true; }
 };
 
 } // namespace

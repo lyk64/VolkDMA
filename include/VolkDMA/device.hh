@@ -16,6 +16,7 @@ namespace volk::dma {
 namespace detail {
 
 class DeviceBackend;
+class SessionRefresh;
 
 } // namespace detail
 
@@ -54,6 +55,7 @@ public:
 private:
     friend class Process;
     friend class InputState;
+    friend class detail::SessionRefresh;
 
     explicit Device(std::shared_ptr<detail::DeviceBackend> backend);
 

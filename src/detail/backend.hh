@@ -66,6 +66,9 @@ public:
     [[nodiscard]] virtual std::vector<uint32_t> process_ids(const std::string& process_name) const = 0;
     [[nodiscard]] virtual std::shared_ptr<ProcessBackend> open_process(uint32_t process_id) const = 0;
     [[nodiscard]] virtual std::unique_ptr<InputBackend> create_input(const Device& device) const = 0;
+    virtual void pause_process_refresh() = 0;
+    virtual void resume_process_refresh() = 0;
+    [[nodiscard]] virtual bool refresh_process(uint32_t process_id) = 0;
 };
 
 } // namespace detail

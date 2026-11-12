@@ -133,8 +133,52 @@ public:
         return open_input(device, vmm.get());
     }
 
+    void pause_process_refresh() override {
+        if (paused) return;
+
+        RefreshTicks ticks;
+        if (!VMMDLL_ConfigGet(vmm.get(), VMMDLL_OPT_CONFIG_PROCCACHE_TICKS_PARTIAL, &ticks.partial) ||
+            !VMMDLL_ConfigGet(vmm.get(), VMMDLL_OPT_CONFIG_PROCCACHE_TICKS_TOTAL, &ticks.total) ||
+            ticks.partial == 0 || ticks.total == 0) {
+            logger.warn("Could not read the process refresh periods; leaving the background process refresh on.");
+            return;
+        }
+
+        paused = ticks;
+        if (!set_refresh_ticks({ .partial = never, .total = never })) {
+            logger.warn("Could not pause the background process refresh.");
+        }
+    }
+
+    void resume_process_refresh() override {
+        if (!paused) return;
+
+        if (!set_refresh_ticks(*paused)) {
+            logger.warn("Could not resume the background process refresh.");
+        }
+        paused.reset();
+    }
+
+    bool refresh_process(uint32_t process_id) override {
+        return VMMDLL_ConfigSet(vmm.get(), VMMDLL_OPT_REFRESH_SPECIFIC_PROCESS | process_id, 1);
+    }
+
 private:
+    struct RefreshTicks {
+        ULONG64 partial{};
+        ULONG64 total{};
+    };
+
+    static constexpr ULONG64 never = 0x7fffffff;
+
+    bool set_refresh_ticks(const RefreshTicks& ticks) const {
+        const BOOL partial = VMMDLL_ConfigSet(vmm.get(), VMMDLL_OPT_CONFIG_PROCCACHE_TICKS_PARTIAL, ticks.partial);
+        const BOOL total = VMMDLL_ConfigSet(vmm.get(), VMMDLL_OPT_CONFIG_PROCCACHE_TICKS_TOTAL, ticks.total);
+        return partial && total;
+    }
+
     VmmHandle vmm;
+    std::optional<RefreshTicks> paused;
 };
 
 } // namespace
