@@ -54,6 +54,9 @@
     <ClInclude Include="include\VolkDMA\process.hh">
       <Filter>include\VolkDMA</Filter>
     </ClInclude>
+    <ClInclude Include="include\VolkDMA\profiler.hh">
+      <Filter>include\VolkDMA</Filter>
+    </ClInclude>
     <ClInclude Include="include\VolkDMA\scatter.hh">
       <Filter>include\VolkDMA</Filter>
     </ClInclude>

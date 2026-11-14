@@ -31,7 +31,8 @@ bool Scatter::prepare_write(uint64_t address, const void* buffer, size_t size) {
     return backend->prepare_write(address, buffer, size);
 }
 
-bool Scatter::execute() {
+bool Scatter::execute(profiler::Location caller, profiler::Location origin) {
+    const profiler::Timed timed{ caller, origin };
     return backend->execute();
 }
 

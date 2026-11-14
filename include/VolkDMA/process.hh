@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "address.hh"
+#include "profiler.hh"
 
 namespace volk::dma {
 
@@ -57,34 +58,34 @@ public:
     [[nodiscard]] std::vector<std::string> get_modules(uint32_t process_id = 0) const;
     [[nodiscard]] std::vector<MemoryRegion> regions() const;
     [[nodiscard]] bool fix_cr3(const std::string& module_name = {}, std::stop_token stop_token = {});
-    bool read(uint64_t address, void* buffer, size_t size) const;
+    bool read(uint64_t address, void* buffer, size_t size, profiler::Location caller = profiler::Location::current()) const;
     [[nodiscard]] uint64_t read_chain(uint64_t base, const std::vector<uint64_t>& offsets) const;
     [[nodiscard]] std::string read_string(uint64_t address, size_t max_length = 256) const;
     [[nodiscard]] uint64_t find_signature(const char* signature, uint64_t range_start, uint64_t range_end) const;
-    [[nodiscard]] bool write(uint64_t address, const void* buffer, size_t size, uint32_t process_id = 0) const;
+    [[nodiscard]] bool write(uint64_t address, const void* buffer, size_t size, uint32_t process_id = 0, profiler::Location caller = profiler::Location::current()) const;
     [[nodiscard]] Scatter create_scatter(uint32_t process_id = 0) const;
 
     template <typename T>
-    [[nodiscard]] T read(uint64_t address) const {
+    [[nodiscard]] T read(uint64_t address, profiler::Location caller = profiler::Location::current()) const {
         T buffer{};
-        this->read(address, &buffer, sizeof(T));
+        this->read(address, &buffer, sizeof(T), caller);
         return buffer;
     }
 
     template <typename T>
-    [[nodiscard]] T read_chain(uint64_t base, const std::vector<uint64_t>& offsets) const {
+    [[nodiscard]] T read_chain(uint64_t base, const std::vector<uint64_t>& offsets, profiler::Location caller = profiler::Location::current()) const {
         if (offsets.empty()) return {};
         uint64_t result = base;
         for (size_t i = 0; i + 1 < offsets.size(); ++i) {
-            result = this->read<uint64_t>(result + offsets[i]);
+            result = this->read<uint64_t>(result + offsets[i], caller);
             if (!is_valid_address(result)) return {};
         }
-        return this->read<T>(result + offsets.back());
+        return this->read<T>(result + offsets.back(), caller);
     }
 
     template <typename T>
-    bool write(uint64_t address, T value, uint32_t process_id = 0) const {
-        return this->write(address, &value, sizeof(T), process_id);
+    bool write(uint64_t address, T value, uint32_t process_id = 0, profiler::Location caller = profiler::Location::current()) const {
+        return this->write(address, &value, sizeof(T), process_id, caller);
     }
 
 private:

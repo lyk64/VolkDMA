@@ -5,6 +5,8 @@
 #include <type_traits>
 #include <vector>
 
+#include "profiler.hh"
+
 namespace volk::dma {
 
 class Process;
@@ -25,7 +27,7 @@ public:
 
     bool prepare_read(uint64_t address, void* buffer, size_t size);
     bool prepare_write(uint64_t address, const void* buffer, size_t size);
-    bool execute();
+    bool execute(profiler::Location caller = profiler::Location::current(), profiler::Location origin = {});
 
     template <typename T>
     bool prepare_read(uint64_t address, T* buffer) {

@@ -160,11 +160,13 @@ bool Process::fix_cr3(const std::string& module_name, std::stop_token stop_token
     return backend->fix_cr3(module_name, stop_token);
 }
 
-bool Process::read(uint64_t address, void* buffer, size_t size) const {
+bool Process::read(uint64_t address, void* buffer, size_t size, profiler::Location caller) const {
     if (!is_valid_address(address)) {
         std::memset(buffer, 0, size);
         return false;
     }
+
+    const profiler::Timed timed{ caller };
 
     const std::optional<size_t> read_size = backend->read(address, buffer, size);
     if (!read_size) {
@@ -258,10 +260,12 @@ uint64_t Process::find_signature(const char* signature, uint64_t range_start, ui
     return range_start + static_cast<uint64_t>(match.begin() - buffer.begin());
 }
 
-bool Process::write(uint64_t address, const void* buffer, size_t size, uint32_t process_id) const {
+bool Process::write(uint64_t address, const void* buffer, size_t size, uint32_t process_id, profiler::Location caller) const {
     if (!is_valid_address(address)) {
         return false;
     }
+
+    const profiler::Timed timed{ caller };
 
     const uint32_t target_process_id = (process_id == 0) ? this->process_id : process_id;
 

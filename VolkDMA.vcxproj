@@ -22,6 +22,7 @@
     <ClInclude Include="src\fpga\resource.hh" />
     <ClInclude Include="src\local\local.hh" />
     <ClInclude Include="include\VolkDMA\process.hh" />
+    <ClInclude Include="include\VolkDMA\profiler.hh" />
     <ClInclude Include="include\VolkDMA\scatter.hh" />
     <ClInclude Include="include\VolkDMA\session.hh" />
   </ItemGroup>
