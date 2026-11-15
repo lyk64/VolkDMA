@@ -55,4 +55,8 @@ std::vector<uint32_t> Device::get_process_id_list(const std::string& process_nam
     return backend->process_ids(process_name);
 }
 
+bool Device::refresh_process(uint32_t process_id) const {
+    return backend->refresh_process(process_id);
+}
+
 } // namespace volk::dma

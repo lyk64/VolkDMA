@@ -51,6 +51,7 @@ public:
 
     [[nodiscard]] std::optional<uint32_t> get_process_id(const std::string& process_name) const;
     [[nodiscard]] std::vector<uint32_t> get_process_id_list(const std::string& process_name) const;
+    bool refresh_process(uint32_t process_id) const;
 
 private:
     friend class Process;
