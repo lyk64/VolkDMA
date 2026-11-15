@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <expected>
 #include <memory>
+#include <optional>
 #include <stop_token>
 #include <string>
 #include <string_view>
@@ -44,6 +45,11 @@ struct MemoryRegion {
     bool is_private{};
 };
 
+struct ScatterOptions {
+    std::optional<uint32_t> process_id{};
+    bool kernel_memory{};
+};
+
 class Process {
 public:
     [[nodiscard]] static std::expected<Process, AttachError> attach(const Device& dma, const std::string& process_name, const std::string& module_name = {}, std::stop_token stop_token = {});
@@ -63,7 +69,7 @@ public:
     [[nodiscard]] std::string read_string(uint64_t address, size_t max_length = 256) const;
     [[nodiscard]] uint64_t find_signature(const char* signature, uint64_t range_start, uint64_t range_end) const;
     [[nodiscard]] bool write(uint64_t address, const void* buffer, size_t size, uint32_t process_id = 0, profiler::Location caller = profiler::Location::current()) const;
-    [[nodiscard]] Scatter create_scatter(uint32_t process_id = 0) const;
+    [[nodiscard]] Scatter create_scatter(ScatterOptions options = {}) const;
 
     template <typename T>
     [[nodiscard]] T read(uint64_t address, profiler::Location caller = profiler::Location::current()) const {

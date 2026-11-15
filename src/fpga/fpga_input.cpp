@@ -22,9 +22,18 @@ namespace {
 
 constexpr volk::log::Logger logger{ "dma.inputstate" };
 
+using KeyTableBytes = std::array<uint8_t, InputState::Keys{}.size() * 2 / 8>;
+
 bool is_down_in_win32k_table(std::span<const uint8_t> table, size_t key) {
     const size_t bit = key * 2;
     return (table[bit / 8] >> (bit % 8)) & 1;
+}
+
+InputState::Keys decode(const KeyTableBytes& table) {
+    InputState::Keys keys;
+    for (size_t key = 0; key < keys.size(); ++key)
+        keys[key] = is_down_in_win32k_table(table, key);
+    return keys;
 }
 
 struct KernelSymbol {
@@ -64,16 +73,23 @@ public:
         return gptCursorAsync.process->read<InputState::Point>(gptCursorAsync.address);
     }
 
-    std::optional<std::bitset<256>> read_keys() const override {
+    std::optional<InputState::Keys> read_keys() const override {
         if (!gafAsyncKeyState.resolved()) return std::nullopt;
 
-        std::array<uint8_t, 256 * 2 / 8> table{};
+        KeyTableBytes table{};
         if (!gafAsyncKeyState.process->read(gafAsyncKeyState.address, table.data(), table.size())) return std::nullopt;
 
-        std::bitset<256> keys;
-        for (size_t key = 0; key < keys.size(); ++key)
-            keys[key] = is_down_in_win32k_table(table, key);
-        return keys;
+        return decode(table);
+    }
+
+    std::optional<InputState::KeyTable> key_table() override {
+        if (!gafAsyncKeyState.resolved()) return std::nullopt;
+        return InputState::KeyTable{ gafAsyncKeyState.address, gathered_table };
+    }
+
+    std::optional<InputState::Keys> gathered_keys() const override {
+        if (!gafAsyncKeyState.resolved()) return std::nullopt;
+        return decode(gathered_table);
     }
 
 private:
@@ -81,6 +97,7 @@ private:
 
     KernelSymbol gptCursorAsync;
     KernelSymbol gafAsyncKeyState;
+    KeyTableBytes gathered_table{};
 
     [[nodiscard]] bool retrieve_gafAsyncKeyState(const Device& dma, VMM_HANDLE vmm, const std::vector<uint32_t>& csrss_process_ids) {
         if (windows_version_build > 22000) {

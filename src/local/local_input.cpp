@@ -18,11 +18,19 @@ public:
         return { position.x, position.y };
     }
 
-    std::optional<std::bitset<256>> read_keys() const override {
-        std::bitset<256> keys;
-        for (int key = 0; key < 256; ++key)
-            keys[key] = (GetAsyncKeyState(key) & 0x8000) != 0;
+    std::optional<InputState::Keys> read_keys() const override {
+        InputState::Keys keys;
+        for (size_t key = 0; key < keys.size(); ++key)
+            keys[key] = (GetAsyncKeyState(static_cast<int>(key)) & 0x8000) != 0;
         return keys;
+    }
+
+    std::optional<InputState::KeyTable> key_table() override {
+        return std::nullopt;
+    }
+
+    std::optional<InputState::Keys> gathered_keys() const override {
+        return std::nullopt;
     }
 };
 

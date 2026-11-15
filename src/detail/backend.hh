@@ -46,7 +46,7 @@ public:
     [[nodiscard]] virtual std::optional<std::vector<std::string>> modules(uint32_t process_id) const = 0;
     [[nodiscard]] virtual std::optional<std::vector<MemoryRegion>> regions() const = 0;
     [[nodiscard]] virtual bool fix_cr3(const std::string& module_name, std::stop_token stop_token) = 0;
-    [[nodiscard]] virtual std::unique_ptr<ScatterBackend> create_scatter(uint32_t process_id) const = 0;
+    [[nodiscard]] virtual std::unique_ptr<ScatterBackend> create_scatter(uint32_t process_id, bool kernel_memory) const = 0;
 };
 
 class InputBackend {
@@ -54,7 +54,9 @@ public:
     virtual ~InputBackend() = default;
 
     [[nodiscard]] virtual InputState::Point cursor_position() const = 0;
-    [[nodiscard]] virtual std::optional<std::bitset<256>> read_keys() const = 0;
+    [[nodiscard]] virtual std::optional<InputState::Keys> read_keys() const = 0;
+    [[nodiscard]] virtual std::optional<InputState::KeyTable> key_table() = 0;
+    [[nodiscard]] virtual std::optional<InputState::Keys> gathered_keys() const = 0;
 };
 
 class DeviceBackend {

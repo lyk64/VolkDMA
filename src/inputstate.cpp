@@ -24,9 +24,20 @@ InputState::Point InputState::get_cursor_position() const {
 }
 
 bool InputState::read_bitmap() {
+    return update(backend->read_keys());
+}
+
+std::optional<InputState::KeyTable> InputState::key_table() {
+    return backend->key_table();
+}
+
+bool InputState::apply_gathered() {
+    return update(backend->gathered_keys());
+}
+
+bool InputState::update(const std::optional<Keys>& read) {
     previous_keys = keys;
-    const std::optional<std::bitset<256>> read = backend->read_keys();
-    keys = read.value_or(std::bitset<256>{});
+    keys = read.value_or(Keys{});
     return read.has_value();
 }
 

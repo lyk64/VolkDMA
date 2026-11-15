@@ -176,7 +176,7 @@ public:
         return static_cast<bool>(handle);
     }
 
-    std::unique_ptr<detail::ScatterBackend> create_scatter(uint32_t target_process_id) const override {
+    std::unique_ptr<detail::ScatterBackend> create_scatter(uint32_t target_process_id, bool) const override {
         if (target_process_id != process_id) {
             logger.error("Local scatters can only target their own process (PID {}, requested {}).", process_id, target_process_id);
             return open_scatter(nullptr, target_process_id);

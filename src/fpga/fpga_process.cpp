@@ -305,8 +305,8 @@ public:
         return false;
     }
 
-    std::unique_ptr<detail::ScatterBackend> create_scatter(uint32_t target_process_id) const override {
-        return open_scatter(vmm, target_process_id);
+    std::unique_ptr<detail::ScatterBackend> create_scatter(uint32_t target_process_id, bool kernel_memory) const override {
+        return open_scatter(vmm, kernel_memory ? target_process_id | VMMDLL_PID_PROCESS_WITH_KERNELMEMORY : target_process_id);
     }
 
 private:

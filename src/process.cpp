@@ -277,8 +277,8 @@ bool Process::write(uint64_t address, const void* buffer, size_t size, uint32_t 
     return true;
 }
 
-Scatter Process::create_scatter(uint32_t process_id) const {
-    return Scatter(backend->create_scatter((process_id != 0) ? process_id : this->process_id));
+Scatter Process::create_scatter(ScatterOptions options) const {
+    return Scatter(backend->create_scatter(options.process_id.value_or(process_id), options.kernel_memory));
 }
 
 } // namespace volk::dma

@@ -4,6 +4,8 @@
 #include <bitset>
 #include <cstdint>
 #include <memory>
+#include <optional>
+#include <span>
 #include <string_view>
 
 namespace volk::dma {
@@ -31,7 +33,17 @@ public:
 
     [[nodiscard]] Point get_cursor_position() const;
 
+    using Keys = std::bitset<256>;
+
+    struct KeyTable {
+        uint64_t address{};
+        std::span<uint8_t> buffer;
+    };
+
     bool read_bitmap();
+    [[nodiscard]] std::optional<KeyTable> key_table();
+    bool apply_gathered();
+
     [[nodiscard]] bool is_key_held(uint8_t virtual_key_code) const;
     [[nodiscard]] bool is_key_pressed(uint8_t virtual_key_code) const;
     void print_down_keys() const;
@@ -203,8 +215,10 @@ public:
 private:
     std::unique_ptr<detail::InputBackend> backend;
 
-    std::bitset<256> keys;
-    std::bitset<256> previous_keys;
+    Keys keys;
+    Keys previous_keys;
+
+    bool update(const std::optional<Keys>& read);
 };
 
 } // namespace volk::dma
