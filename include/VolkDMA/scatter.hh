@@ -30,6 +30,7 @@ public:
     bool execute(profiler::Location caller = profiler::Location::current(), profiler::Location origin = {});
 
     template <typename T>
+        requires std::is_trivially_copyable_v<T>
     bool prepare_read(uint64_t address, T* buffer) {
         return this->prepare_read(address, reinterpret_cast<void*>(buffer), sizeof(T));
     }
@@ -43,6 +44,7 @@ public:
     }
 
     template <typename T>
+        requires std::is_trivially_copyable_v<T>
     bool prepare_write(uint64_t address, const T& value) {
         return this->prepare_write(address, &value, sizeof(T));
     }
