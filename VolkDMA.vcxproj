@@ -15,6 +15,7 @@
     <ClInclude Include="external\VolkLog\include\VolkLog\log.hh" />
     <ClInclude Include="external\vmm\vmmdll.h" />
     <ClInclude Include="include\VolkDMA\address.hh" />
+    <ClInclude Include="include\VolkDMA\concepts.hh" />
     <ClInclude Include="include\VolkDMA\device.hh" />
     <ClInclude Include="include\VolkDMA\inputstate.hh" />
     <ClInclude Include="src\detail\backend.hh" />

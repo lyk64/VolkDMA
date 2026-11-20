@@ -2,9 +2,9 @@
 
 #include <cstdint>
 #include <memory>
-#include <type_traits>
 #include <vector>
 
+#include "concepts.hh"
 #include "profiler.hh"
 
 namespace volk::dma {
@@ -29,22 +29,19 @@ public:
     bool prepare_write(uint64_t address, const void* buffer, size_t size);
     bool execute(profiler::Location caller = profiler::Location::current(), profiler::Location origin = {});
 
-    template <typename T>
-        requires std::is_trivially_copyable_v<T>
+    template <TriviallyCopyable T>
     bool prepare_read(uint64_t address, T* buffer) {
         return this->prepare_read(address, reinterpret_cast<void*>(buffer), sizeof(T));
     }
 
-    template <typename T>
-        requires std::is_trivially_copyable_v<T>
+    template <TriviallyCopyable T>
     bool prepare_read(uint64_t address, std::vector<T>& buffer, size_t count) {
         buffer.resize(count);
         if (count == 0) return false;
         return this->prepare_read(address, buffer.data(), count * sizeof(T));
     }
 
-    template <typename T>
-        requires std::is_trivially_copyable_v<T>
+    template <TriviallyCopyable T>
     bool prepare_write(uint64_t address, const T& value) {
         return this->prepare_write(address, &value, sizeof(T));
     }

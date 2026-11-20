@@ -7,10 +7,10 @@
 #include <stop_token>
 #include <string>
 #include <string_view>
-#include <type_traits>
 #include <vector>
 
 #include "address.hh"
+#include "concepts.hh"
 #include "profiler.hh"
 
 namespace volk::dma {
@@ -72,16 +72,14 @@ public:
     [[nodiscard]] bool write(uint64_t address, const void* buffer, size_t size, uint32_t process_id = 0, profiler::Location caller = profiler::Location::current()) const;
     [[nodiscard]] Scatter create_scatter(ScatterOptions options = {}) const;
 
-    template <typename T>
-        requires std::is_trivially_copyable_v<T>
+    template <TriviallyCopyable T>
     [[nodiscard]] T read(uint64_t address, profiler::Location caller = profiler::Location::current()) const {
         T buffer{};
         this->read(address, &buffer, sizeof(T), caller);
         return buffer;
     }
 
-    template <typename T>
-        requires std::is_trivially_copyable_v<T>
+    template <TriviallyCopyable T>
     [[nodiscard]] T read_chain(uint64_t base, const std::vector<uint64_t>& offsets, profiler::Location caller = profiler::Location::current()) const {
         if (offsets.empty()) return {};
         uint64_t result = base;
@@ -92,8 +90,7 @@ public:
         return this->read<T>(result + offsets.back(), caller);
     }
 
-    template <typename T>
-        requires std::is_trivially_copyable_v<T>
+    template <TriviallyCopyable T>
     bool write(uint64_t address, T value, uint32_t process_id = 0, profiler::Location caller = profiler::Location::current()) const {
         return this->write(address, &value, sizeof(T), process_id, caller);
     }
