@@ -1,11 +1,34 @@
 #pragma once
 
+#include <cstdint>
+#include <vector>
+
+namespace volk::dma::profiler {
+
+struct WaveSite {
+    const char* function{};
+    const char* file{};
+    uint32_t line{};
+    uint32_t waves{};
+    uint32_t reads{};
+    uint32_t deepest{};
+};
+
+struct WaveReport {
+    uint32_t waves{};
+    uint32_t reads{};
+    long long duration_us{};
+    std::vector<uint32_t> reads_per_wave;
+    std::vector<WaveSite> sites;
+};
+
+} // namespace volk::dma::profiler
+
 #ifdef _DEBUG
 
 #include <algorithm>
 #include <atomic>
 #include <chrono>
-#include <cstdint>
 #include <format>
 #include <functional>
 #include <mutex>
@@ -13,7 +36,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
-#include <vector>
+#include <utility>
 
 namespace volk::dma::profiler {
 
@@ -136,6 +159,82 @@ inline void reset() {
     return timings;
 }
 
+class WaveRecorder {
+public:
+    void record(const Location& loc, uint32_t reads) {
+        if (reads == 0 || !enabled.load(std::memory_order_relaxed)) return;
+
+        if (reads_per_wave.size() <= wave)
+            reads_per_wave.resize(wave + 1);
+        reads_per_wave[wave] += reads;
+
+        auto& entry = sites[{ loc.file_name(), loc.line() }];
+        if (!entry.function) {
+            entry.function = loc.function_name();
+            entry.file = loc.file_name();
+            entry.line = loc.line();
+        }
+        entry.reads += reads;
+        entry.deepest = wave;
+        if (entry.last_seen != wave) {
+            entry.last_seen = wave;
+            ++entry.waves;
+        }
+    }
+
+    void pump_enter() { started = std::chrono::steady_clock::now(); }
+
+    void wave_fired() noexcept { ++wave; }
+
+    void pump_exit() {
+        if (!sites.empty() && enabled.load(std::memory_order_relaxed)) {
+            WaveReport report{
+                .waves = wave,
+                .duration_us = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count(),
+                .reads_per_wave = std::move(reads_per_wave),
+            };
+
+            report.sites.reserve(sites.size());
+            for (const auto& [key, entry] : sites) {
+                report.reads += entry.reads;
+                report.sites.push_back(entry);
+            }
+            std::ranges::sort(report.sites, std::greater{}, &WaveSite::waves);
+
+            reports.push_back(std::move(report));
+        }
+
+        wave = 0;
+        reads_per_wave.clear();
+        sites.clear();
+    }
+
+    [[nodiscard]] std::vector<WaveReport> drain() noexcept { return std::exchange(reports, {}); }
+
+private:
+    struct Key {
+        const char* file;
+        uint32_t line;
+        bool operator==(const Key&) const noexcept = default;
+    };
+
+    struct KeyHash {
+        size_t operator()(const Key& key) const noexcept {
+            return std::hash<const void*>{}(key.file) * 1099511628211ull + key.line;
+        }
+    };
+
+    struct Entry : WaveSite {
+        uint32_t last_seen = UINT32_MAX;
+    };
+
+    uint32_t wave = 0;
+    std::vector<uint32_t> reads_per_wave;
+    std::unordered_map<Key, Entry, KeyHash> sites;
+    std::chrono::steady_clock::time_point started;
+    std::vector<WaveReport> reports;
+};
+
 } // namespace volk::dma::profiler
 
 #else
@@ -150,6 +249,15 @@ class Timed {
 public:
     explicit Timed(Location = {}, Location = {}) noexcept {}
     ~Timed() {}
+};
+
+class WaveRecorder {
+public:
+    void record(const Location&, uint32_t) noexcept {}
+    void pump_enter() noexcept {}
+    void wave_fired() noexcept {}
+    void pump_exit() noexcept {}
+    [[nodiscard]] std::vector<WaveReport> drain() noexcept { return {}; }
 };
 
 } // namespace volk::dma::profiler
