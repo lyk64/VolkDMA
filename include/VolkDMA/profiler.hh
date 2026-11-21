@@ -3,6 +3,12 @@
 #include <cstdint>
 #include <vector>
 
+namespace volk::dma {
+
+class IoContext;
+
+} // namespace volk::dma
+
 namespace volk::dma::profiler {
 
 struct WaveSite {
@@ -161,6 +167,11 @@ inline void reset() {
 
 class WaveRecorder {
 public:
+    [[nodiscard]] std::vector<WaveReport> drain() noexcept { return std::exchange(reports, {}); }
+
+private:
+    friend class volk::dma::IoContext;
+
     void record(const Location& loc, uint32_t reads) {
         if (reads == 0 || !enabled.load(std::memory_order_relaxed)) return;
 
@@ -209,9 +220,6 @@ public:
         sites.clear();
     }
 
-    [[nodiscard]] std::vector<WaveReport> drain() noexcept { return std::exchange(reports, {}); }
-
-private:
     struct Key {
         const char* file;
         uint32_t line;
@@ -253,11 +261,15 @@ public:
 
 class WaveRecorder {
 public:
+    [[nodiscard]] std::vector<WaveReport> drain() noexcept { return {}; }
+
+private:
+    friend class volk::dma::IoContext;
+
     void record(const Location&, uint32_t) noexcept {}
     void pump_enter() noexcept {}
     void wave_fired() noexcept {}
     void pump_exit() noexcept {}
-    [[nodiscard]] std::vector<WaveReport> drain() noexcept { return {}; }
 };
 
 } // namespace volk::dma::profiler

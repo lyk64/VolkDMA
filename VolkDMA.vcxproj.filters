@@ -54,6 +54,9 @@
     <ClInclude Include="include\VolkDMA\inputstate.hh">
       <Filter>include\VolkDMA</Filter>
     </ClInclude>
+    <ClInclude Include="include\VolkDMA\iocontext.hh">
+      <Filter>include\VolkDMA</Filter>
+    </ClInclude>
     <ClInclude Include="include\VolkDMA\process.hh">
       <Filter>include\VolkDMA</Filter>
     </ClInclude>

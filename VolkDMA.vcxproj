@@ -18,6 +18,7 @@
     <ClInclude Include="include\VolkDMA\concepts.hh" />
     <ClInclude Include="include\VolkDMA\device.hh" />
     <ClInclude Include="include\VolkDMA\inputstate.hh" />
+    <ClInclude Include="include\VolkDMA\iocontext.hh" />
     <ClInclude Include="src\detail\backend.hh" />
     <ClInclude Include="src\fpga\fpga.hh" />
     <ClInclude Include="src\fpga\resource.hh" />
