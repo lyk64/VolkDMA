@@ -2,8 +2,10 @@
 
 #include <VolkLog/log.hh>
 
+#include <atomic>
 #include <optional>
 
+#include "include/VolkDMA/coroutine.hh"
 #include "include/VolkDMA/device.hh"
 #include "detail/backend.hh"
 
@@ -27,7 +29,7 @@ bool InputState::read_bitmap() {
     return update(backend->read_keys());
 }
 
-std::optional<InputState::KeyTable> InputState::key_table() {
+std::optional<detail::KeyTable> InputState::key_table() {
     return backend->key_table();
 }
 
@@ -55,6 +57,22 @@ void InputState::print_down_keys() const {
             logger.debug("Key down: {}.", name);
         }
     }
+}
+
+Task update_input(InputState& input_state) {
+    const auto table = input_state.key_table();
+    if (!table || !IoContext::current().options.kernel_memory) {
+        static std::atomic<bool> warned{ false };
+        if (table && !warned.exchange(true))
+            logger.warn("The IoContext has no kernel memory, so keys are read with a blocking read instead of in the frame's wave.");
+        input_state.read_bitmap();
+        co_return;
+    }
+
+    Gather g;
+    g.read(table->address, table->buffer);
+    co_await g;
+    input_state.apply_gathered();
 }
 
 } // namespace volk::dma

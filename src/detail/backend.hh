@@ -55,7 +55,7 @@ public:
 
     [[nodiscard]] virtual InputState::Point cursor_position() const = 0;
     [[nodiscard]] virtual std::optional<InputState::Keys> read_keys() const = 0;
-    [[nodiscard]] virtual std::optional<InputState::KeyTable> key_table() = 0;
+    [[nodiscard]] virtual std::optional<detail::KeyTable> key_table() = 0;
     [[nodiscard]] virtual std::optional<InputState::Keys> gathered_keys() const = 0;
 };
 

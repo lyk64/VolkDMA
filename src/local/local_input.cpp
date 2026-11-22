@@ -25,7 +25,7 @@ public:
         return keys;
     }
 
-    std::optional<InputState::KeyTable> key_table() override {
+    std::optional<detail::KeyTable> key_table() override {
         return std::nullopt;
     }
 

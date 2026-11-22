@@ -11,12 +11,25 @@
 namespace volk::dma {
 
 class Device;
+class InputState;
+
+template <class T>
+class BasicTask;
+
+using Task = BasicTask<void>;
 
 namespace detail {
 
 class InputBackend;
 
+struct KeyTable {
+    uint64_t address{};
+    std::span<uint8_t> buffer;
+};
+
 } // namespace detail
+
+Task update_input(InputState& input_state);
 
 class InputState {
 public:
@@ -35,14 +48,7 @@ public:
 
     using Keys = std::bitset<256>;
 
-    struct KeyTable {
-        uint64_t address{};
-        std::span<uint8_t> buffer;
-    };
-
     bool read_bitmap();
-    [[nodiscard]] std::optional<KeyTable> key_table();
-    bool apply_gathered();
 
     [[nodiscard]] bool is_key_held(uint8_t virtual_key_code) const;
     [[nodiscard]] bool is_key_pressed(uint8_t virtual_key_code) const;
@@ -213,11 +219,15 @@ public:
     });
 
 private:
+    friend Task update_input(InputState& input_state);
+
     std::unique_ptr<detail::InputBackend> backend;
 
     Keys keys;
     Keys previous_keys;
 
+    [[nodiscard]] std::optional<detail::KeyTable> key_table();
+    bool apply_gathered();
     bool update(const std::optional<Keys>& read);
 };
 

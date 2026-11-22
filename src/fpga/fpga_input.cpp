@@ -82,9 +82,9 @@ public:
         return decode(table);
     }
 
-    std::optional<InputState::KeyTable> key_table() override {
+    std::optional<detail::KeyTable> key_table() override {
         if (!gafAsyncKeyState.resolved()) return std::nullopt;
-        return InputState::KeyTable{ gafAsyncKeyState.address, gathered_table };
+        return detail::KeyTable{ gafAsyncKeyState.address, gathered_table };
     }
 
     std::optional<InputState::Keys> gathered_keys() const override {

@@ -37,7 +37,7 @@ public:
     class Binding;
 
     explicit IoContext(const Process& process, IoContextOptions options = {})
-        : process(process), scatter(this->process.create_scatter({ .kernel_memory = options.kernel_memory })) {}
+        : process(process), options(options), scatter(this->process.create_scatter({ .kernel_memory = options.kernel_memory })) {}
 
     IoContext(const IoContext&) = delete;
     IoContext& operator=(const IoContext&) = delete;
@@ -74,6 +74,7 @@ public:
     }
 
     const Process process;
+    const IoContextOptions options;
 
 private:
     template <class T>
