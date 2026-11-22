@@ -25,6 +25,9 @@ struct ReadArrayAwaiter;
 
 class Gather;
 
+template <TriviallyCopyable T>
+bool write(uint64_t address, const T& value);
+
 struct IoContextOptions {
     bool kernel_memory{};
 };
@@ -38,11 +41,6 @@ public:
 
     IoContext(const IoContext&) = delete;
     IoContext& operator=(const IoContext&) = delete;
-
-    template <TriviallyCopyable T>
-    bool write(uint64_t address, const T& value) {
-        return scatter.prepare_write(address, value);
-    }
 
     [[nodiscard]] bool idle() const noexcept { return pending.empty(); }
 
@@ -86,9 +84,17 @@ private:
 
     friend class Gather;
 
+    template <TriviallyCopyable T>
+    friend bool write(uint64_t address, const T& value);
+
     template <class... Args>
     bool prepare_read(uint64_t address, Args&&... args) {
         return scatter.prepare_read(address, std::forward<Args>(args)...);
+    }
+
+    template <TriviallyCopyable T>
+    bool prepare_write(uint64_t address, const T& value) {
+        return scatter.prepare_write(address, value);
     }
 
     void submit(std::coroutine_handle<> h, const profiler::Location& loc, uint32_t reads) {

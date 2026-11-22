@@ -209,6 +209,11 @@ template <TriviallyCopyable T>
     return detail::ReadArrayAwaiter<T>{ .address = address, .count = count, .loc = loc };
 }
 
+template <TriviallyCopyable T>
+bool write(uint64_t address, const T& value) {
+    return IoContext::current().prepare_write(address, value);
+}
+
 class Gather {
 public:
     explicit Gather(profiler::Location loc = profiler::Location::current()) : loc(loc) {}
