@@ -13,6 +13,18 @@
 
 namespace volk::dma {
 
+namespace detail {
+
+template <class T>
+struct ReadAwaiter;
+
+template <class T>
+struct ReadArrayAwaiter;
+
+} // namespace detail
+
+class Gather;
+
 struct IoContextOptions {
     bool kernel_memory{};
 };
@@ -27,19 +39,9 @@ public:
     IoContext(const IoContext&) = delete;
     IoContext& operator=(const IoContext&) = delete;
 
-    template <class... Args>
-    bool prepare_read(uint64_t address, Args&&... args) {
-        return scatter.prepare_read(address, std::forward<Args>(args)...);
-    }
-
     template <TriviallyCopyable T>
     bool write(uint64_t address, const T& value) {
         return scatter.prepare_write(address, value);
-    }
-
-    void submit(std::coroutine_handle<> h, const profiler::Location& loc, uint32_t reads) {
-        recorder.record(loc, reads);
-        pending.push_back(h);
     }
 
     [[nodiscard]] bool idle() const noexcept { return pending.empty(); }
@@ -76,6 +78,24 @@ public:
     const Process process;
 
 private:
+    template <class T>
+    friend struct detail::ReadAwaiter;
+
+    template <class T>
+    friend struct detail::ReadArrayAwaiter;
+
+    friend class Gather;
+
+    template <class... Args>
+    bool prepare_read(uint64_t address, Args&&... args) {
+        return scatter.prepare_read(address, std::forward<Args>(args)...);
+    }
+
+    void submit(std::coroutine_handle<> h, const profiler::Location& loc, uint32_t reads) {
+        recorder.record(loc, reads);
+        pending.push_back(h);
+    }
+
     void resume_batch() {
         for (auto h : batch) {
             if (h && !h.done()) h.resume();

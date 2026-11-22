@@ -16,6 +16,7 @@
     <ClInclude Include="external\vmm\vmmdll.h" />
     <ClInclude Include="include\VolkDMA\address.hh" />
     <ClInclude Include="include\VolkDMA\concepts.hh" />
+    <ClInclude Include="include\VolkDMA\coroutine.hh" />
     <ClInclude Include="include\VolkDMA\device.hh" />
     <ClInclude Include="include\VolkDMA\inputstate.hh" />
     <ClInclude Include="include\VolkDMA\iocontext.hh" />

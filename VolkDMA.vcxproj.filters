@@ -48,6 +48,9 @@
     <ClInclude Include="include\VolkDMA\concepts.hh">
       <Filter>include\VolkDMA</Filter>
     </ClInclude>
+    <ClInclude Include="include\VolkDMA\coroutine.hh">
+      <Filter>include\VolkDMA</Filter>
+    </ClInclude>
     <ClInclude Include="include\VolkDMA\device.hh">
       <Filter>include\VolkDMA</Filter>
     </ClInclude>
