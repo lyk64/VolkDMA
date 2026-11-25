@@ -37,6 +37,7 @@ struct WaveReport {
 #include <chrono>
 #include <format>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <source_location>
 #include <string>
@@ -243,9 +244,58 @@ private:
     std::vector<WaveReport> reports;
 };
 
+struct IntervalReport {
+    uint64_t frames{};
+    double waves_per_frame{};
+    double multi_wave_percent{};
+    uint32_t worst_waves{};
+    std::vector<Timing> ops;
+
+    [[nodiscard]] double ms_per_frame(const Timing& timing) const noexcept {
+        return frames ? timing.calls * timing.average_ms / frames : 0.0;
+    }
+};
+
+class FrameStats {
+public:
+    explicit FrameStats(std::chrono::seconds interval_length = std::chrono::seconds{ 5 }) : length(interval_length) {}
+
+    FrameStats(const FrameStats&) = delete;
+    FrameStats& operator=(const FrameStats&) = delete;
+
+    void skip_frame(std::vector<WaveReport> pumps);
+    void end_frame(std::vector<WaveReport> pumps);
+
+    void reset_peak() noexcept { peak_reset_requested.store(true, std::memory_order_relaxed); }
+
+    [[nodiscard]] std::shared_ptr<const WaveReport> last() const noexcept { return last_report.load(std::memory_order_acquire); }
+    [[nodiscard]] std::shared_ptr<const WaveReport> peak() const noexcept { return peak_report.load(std::memory_order_acquire); }
+    [[nodiscard]] std::shared_ptr<const IntervalReport> interval() const noexcept { return interval_report.load(std::memory_order_acquire); }
+    [[nodiscard]] std::chrono::seconds interval_length() const noexcept { return length; }
+
+private:
+    void publish(std::vector<WaveReport>& pumps);
+
+    const std::chrono::seconds length;
+
+    std::atomic<bool> peak_reset_requested{ false };
+    std::atomic<std::shared_ptr<const WaveReport>> last_report{ std::make_shared<const WaveReport>() };
+    std::atomic<std::shared_ptr<const WaveReport>> peak_report{ std::make_shared<const WaveReport>() };
+    std::atomic<std::shared_ptr<const IntervalReport>> interval_report{ std::make_shared<const IntervalReport>() };
+
+    uint32_t peak_waves = 0;
+    uint64_t frames = 0;
+    uint64_t waves = 0;
+    uint64_t multi_wave_frames = 0;
+    uint32_t worst_waves = 0;
+    std::chrono::steady_clock::time_point interval_end{};
+};
+
 } // namespace volk::dma::profiler
 
 #else
+
+#include <chrono>
 
 namespace volk::dma::profiler {
 
@@ -270,6 +320,14 @@ private:
     void pump_enter() noexcept {}
     void wave_fired() noexcept {}
     void pump_exit() noexcept {}
+};
+
+class FrameStats {
+public:
+    explicit FrameStats(std::chrono::seconds = std::chrono::seconds{ 5 }) noexcept {}
+
+    void skip_frame(std::vector<WaveReport>) noexcept {}
+    void end_frame(std::vector<WaveReport>) noexcept {}
 };
 
 } // namespace volk::dma::profiler
